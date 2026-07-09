@@ -385,6 +385,14 @@ public:
         return (uint32_t)(*((__gm__ uint32_t *)tiling_gm + 1 + offset_tiling));
     }
 
+    __aicore__ __attribute__((always_inline)) inline uint32_t GetRuntimeKvSeqLenTP1(uint32_t batch, uint32_t offset_tiling)
+    {
+        if (context_lens_gm != nullptr) {
+            return static_cast<uint32_t>(context_lens_gm[batch]);
+        }
+        return (uint32_t)(*((__gm__ uint32_t *)tiling_gm + 2 + offset_tiling));
+    }
+
 
     __aicore__ __attribute__((always_inline)) inline void Run()
     {
@@ -513,7 +521,7 @@ public:
             uint32_t cur_batch = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + offset_tiling));
 
             uint32_t q_seqlen = 1;
-            uint32_t kv_seqlen = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + 2 + offset_tiling));
+            uint32_t kv_seqlen = GetRuntimeKvSeqLenTP1(cur_batch, offset_tiling);
             if (kv_seqlen == 0) {
                 continue;
             }
@@ -530,7 +538,8 @@ public:
 
         // suppose all seqs have same length
         if (tail > 0){
-            uint32_t sample_kv_seqlen = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + tiling_head_size + 2));
+            uint32_t sample_batch = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + tiling_head_size));
+            uint32_t sample_kv_seqlen = GetRuntimeKvSeqLenTP1(sample_batch, tiling_head_size);
             bool enableExtraOptimization = true;
             if (block_num % 4 == 3) {
                 // cannot optimize this situation due to math problem
@@ -580,7 +589,7 @@ public:
                     uint32_t cur_batch = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + offset_tiling));
         
                     uint32_t q_seqlen = 1;
-                    uint32_t kv_seqlen = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + 2 + offset_tiling));
+                    uint32_t kv_seqlen = GetRuntimeKvSeqLenTP1(cur_batch, offset_tiling);
                     uint32_t kv_seqlen_each = kv_seqlen / cores_per_seq;
                     uint32_t kv_seqlen_align = (kv_seqlen_each + block_size - 1) / block_size * block_size;
                     uint32_t actual_work_cores = kv_seqlen / kv_seqlen_align + (kv_seqlen % kv_seqlen_align != 0);
@@ -611,7 +620,7 @@ public:
                     uint32_t cur_batch = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + offset_tiling));
 
                     uint32_t q_seqlen = 1;
-                    uint32_t kv_seqlen = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + 2 + offset_tiling));
+                    uint32_t kv_seqlen = GetRuntimeKvSeqLenTP1(cur_batch, offset_tiling);
                     if (kv_seqlen > 0) {
                         uint32_t kv_seqlen_align = (kv_seqlen + block_size - 1) / block_size * block_size;
     
@@ -635,7 +644,7 @@ public:
                     uint32_t cur_batch = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + offset_tiling));
         
                     uint32_t q_seqlen = 1;
-                    uint32_t kv_seqlen = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + 2 + offset_tiling));
+                    uint32_t kv_seqlen = GetRuntimeKvSeqLenTP1(cur_batch, offset_tiling);
                     uint32_t kv_seqlen_each = kv_seqlen / cores_per_seq;
                     uint32_t kv_seqlen_align = (kv_seqlen_each + block_size - 1) / block_size * block_size;
                     uint32_t kv_seqlen_process = (block_idx % cores_per_seq == cores_per_seq - 1) ? 
@@ -660,7 +669,7 @@ public:
                         uint32_t cur_batch = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + offset_tiling));
             
                         uint32_t q_seqlen = 1;
-                        uint32_t kv_seqlen = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + 2 + offset_tiling));
+                        uint32_t kv_seqlen = GetRuntimeKvSeqLenTP1(cur_batch, offset_tiling);
                         uint32_t kv_seqlen_each = kv_seqlen / cores_per_seq;
                         uint32_t kv_seqlen_align = (kv_seqlen_each + block_size - 1) / block_size * block_size;
                         uint32_t kv_seqlen_process = (block_idx % cores_per_seq == cores_per_seq - 1) ? 
@@ -1825,6 +1834,14 @@ public:
         return (uint32_t)(*((__gm__ uint32_t *)tiling_gm + 1 + offset_tiling));
     }
 
+    __aicore__ __attribute__((always_inline)) inline uint32_t GetRuntimeKvSeqLenTP1(uint32_t batch, uint32_t offset_tiling)
+    {
+        if (context_lens_gm != nullptr) {
+            return static_cast<uint32_t>(context_lens_gm[batch]);
+        }
+        return (uint32_t)(*((__gm__ uint32_t *)tiling_gm + 2 + offset_tiling));
+    }
+
     __aicore__ __attribute__((always_inline)) inline void SetArgs2(
         __gm__ uint8_t *__restrict__ lse_out_gm)
     {
@@ -1911,7 +1928,7 @@ public:
             uint32_t cur_batch = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + offset_tiling));
 
             uint32_t q_seqlen = 1;
-            uint32_t kv_seqlen = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + 2 + offset_tiling));
+            uint32_t kv_seqlen = GetRuntimeKvSeqLenTP1(cur_batch, offset_tiling);
             if (kv_seqlen == 0) {
                 continue;
             }
@@ -1929,7 +1946,8 @@ public:
         
         // suppose all seqs have same length
         if (tail > 0){
-            uint32_t sample_kv_seqlen = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + tiling_head_size + 2));
+            uint32_t sample_batch = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + tiling_head_size));
+            uint32_t sample_kv_seqlen = GetRuntimeKvSeqLenTP1(sample_batch, tiling_head_size);
             bool enableExtraOptimization = true;
             if (block_num % 4 == 3) {
                 // cannot optimize this situation due to math problem
@@ -1977,7 +1995,7 @@ public:
                     uint32_t cur_batch = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + offset_tiling));
                     
                     uint32_t q_seqlen = 1;
-                    uint32_t kv_seqlen = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + 2 + offset_tiling));
+                    uint32_t kv_seqlen = GetRuntimeKvSeqLenTP1(cur_batch, offset_tiling);
                     uint32_t kv_seqlen_each = kv_seqlen / cores_per_seq;
                     uint32_t kv_seqlen_align = (kv_seqlen_each + block_size - 1) / block_size * block_size;
                     uint32_t actual_work_cores = kv_seqlen / kv_seqlen_align + (kv_seqlen % kv_seqlen_align != 0);
@@ -2041,7 +2059,7 @@ public:
                     uint32_t cur_batch = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + offset_tiling));
                     
                     uint32_t q_seqlen = 1;
-                    uint32_t kv_seqlen = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + 2 + offset_tiling));
+                    uint32_t kv_seqlen = GetRuntimeKvSeqLenTP1(cur_batch, offset_tiling);
                     if (kv_seqlen > 0) {
                         uint32_t kv_seqlen_align = (kv_seqlen + block_size - 1) / block_size * block_size;
     
@@ -2066,7 +2084,7 @@ public:
                     uint32_t cur_batch = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + offset_tiling));
                     
                     uint32_t q_seqlen = 1;
-                    uint32_t kv_seqlen = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + 2 + offset_tiling));
+                    uint32_t kv_seqlen = GetRuntimeKvSeqLenTP1(cur_batch, offset_tiling);
                     uint32_t kv_seqlen_each = kv_seqlen / cores_per_seq;
                     uint32_t kv_seqlen_align = (kv_seqlen_each + block_size - 1) / block_size * block_size;
                     uint32_t kv_seqlen_process = (block_idx % cores_per_seq == cores_per_seq - 1) ? 
@@ -2106,7 +2124,7 @@ public:
                         uint32_t cur_batch = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + offset_tiling));
                         
                         uint32_t q_seqlen = 1;
-                        uint32_t kv_seqlen = (uint32_t)(*((__gm__ uint32_t *)tiling_gm + 2 + offset_tiling));
+                        uint32_t kv_seqlen = GetRuntimeKvSeqLenTP1(cur_batch, offset_tiling);
                         uint32_t kv_seqlen_each = kv_seqlen / cores_per_seq;
                         uint32_t kv_seqlen_align = (kv_seqlen_each + block_size - 1) / block_size * block_size;
                         uint32_t kv_seqlen_process = (block_idx % cores_per_seq == cores_per_seq - 1) ? 
