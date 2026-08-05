@@ -332,6 +332,7 @@ elif [[ "$SOC_VERSION" =~ ^ascend950 ]]; then
         "x_attention"
         "cache_unshared_kv"
         "causal_conv1d"
+        "causal_conv1d_qkv"
         "convert_kv_cache_format"
         "beam_search"
         "index_group_matmul"
@@ -341,6 +342,7 @@ elif [[ "$SOC_VERSION" =~ ^ascend950 ]]; then
         "moe_grouped_matmul_swiglu_quant"
         "pp_matmul_opt"
         "replace_token"
+        "reshape_and_cache_a5"
         "select_unshared_kv"
         # "x_attention_tl"  # A5 kernel not adapted
         "x_flash_attention_infer"
