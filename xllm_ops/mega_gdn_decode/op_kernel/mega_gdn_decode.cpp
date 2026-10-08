@@ -1,3 +1,7 @@
+// Preserve upstream main for non-A5 targets.
+#if defined(GDN_PREFILL_TARGET_A5) || (defined(__NPU_ARCH__) && __NPU_ARCH__ == 3510) || (defined(__CCE_AICORE__) && __CCE_AICORE__ == 310)
+#include "arch35/mega_gdn_decode.cpp"
+#else
 /* Copyright 2026 The xLLM Authors. All Rights Reserved. */
 
 #include "mega_gdn_decode_pto_kernel.h"
@@ -91,3 +95,5 @@ extern "C" __global__ __aicore__ void mega_gdn_decode(
 // The generated mixed-kernel wrapper calls matmul::clearWorkspace. Keep this
 // include after PTO code to avoid the CANN DYNAMIC/pto::DYNAMIC name collision.
 #include "lib/matmul_intf.h"
+
+#endif

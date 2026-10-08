@@ -1,3 +1,7 @@
+// A5 implementation is isolated; the non-A5 branch is upstream main fee3816.
+#if defined(GDN_PREFILL_TARGET_A5) || (defined(__NPU_ARCH__) && __NPU_ARCH__ == 3510) || (defined(__CCE_AICORE__) && __CCE_AICORE__ == 310)
+#include "arch35/mega_gdn_prefill_op.cpp"
+#else
 // Qwen3.5 prefill Conv-to-gated-RMSNorm single-launch PTO kernel.
 
 #include "gdn_prefill_arch.h"
@@ -425,3 +429,5 @@ extern "C" __global__ __aicore__ void GDN_KERNEL_NAME(
 }
 
 #undef GDN_PREFILL_COMPUTE_DTYPE
+
+#endif

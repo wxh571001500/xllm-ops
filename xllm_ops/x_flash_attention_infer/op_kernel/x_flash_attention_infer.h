@@ -14,6 +14,8 @@
 #include "lib/matmul_intf.h"
 using namespace AscendC;
 #include "x_flash_attention_infer_common.h"
+#include "window_online_softmax.h"
+#include "window_rescale_o.h"
 
 using namespace Catlass;
 
@@ -82,6 +84,11 @@ public:
         uint32_t maskType = fATilingData->maskType;
         float scaleValue = fATilingData->scaleValue;
 
+        AscendC::GlobalTensor<int32_t> gKvStarts;
+        if (params.kv_starts != nullptr) {
+            gKvStarts.SetGlobalBuffer(reinterpret_cast<__gm__ int32_t*>(params.kv_starts));
+        }
+
         AscendC::GlobalTensor<ElementQ> gQ;
         gQ.SetGlobalBuffer((__gm__ ElementQ *)params.q);
         AscendC::GlobalTensor<ElementK> gK;
@@ -92,10 +99,10 @@ public:
         gMask.SetGlobalBuffer((__gm__ ElementMask *)params.mask);
         AscendC::GlobalTensor<int32_t> gBlockTable;
         gBlockTable.SetGlobalBuffer((__gm__ int32_t *)(params.blockTables));
-        AscendC::GlobalTensor<int64_t> gActualQseqlen;
-        gActualQseqlen.SetGlobalBuffer((__gm__ int64_t *)params.actualQseqlen);
-        AscendC::GlobalTensor<int64_t> gActualKvseqlen;
-        gActualKvseqlen.SetGlobalBuffer((__gm__ int64_t *)params.actualKvseqlen);
+        AscendC::GlobalTensor<int32_t> gActualQseqlen;
+        gActualQseqlen.SetGlobalBuffer((__gm__ int32_t *)params.actualQseqlen);
+        AscendC::GlobalTensor<int32_t> gActualKvseqlen;
+        gActualKvseqlen.SetGlobalBuffer((__gm__ int32_t *)params.actualKvseqlen);
         AscendC::GlobalTensor<ElementO> gO;
         gO.SetGlobalBuffer((__gm__ ElementO *)params.o);
         AscendC::GlobalTensor<ElementS> gS;
@@ -275,7 +282,12 @@ public:
             uint32_t rowNum = qSBlockSize * qNBlockSize;
             uint32_t rowNumRound = RoundUp(rowNum, FaiKenel::BLOCK_SIZE);
 
-            uint32_t noSkipKvS = kvSeqlen;
+            const uint32_t kvStart = params.kv_starts == nullptr
+                                         ? 0
+                                         : gKvStarts.GetValue(curBatch);
+            const uint32_t firstKvPage = kvStart / pagedBlockSize;
+            const uint32_t firstPagePrefix = kvStart % pagedBlockSize;
+            uint32_t noSkipKvS = kvSeqlen - firstKvPage * pagedBlockSize;
             if (maskType != 0) {
                 uint32_t diffS = kvSeqlen - qSeqlen;
                 noSkipKvS = (qSBlockIdx + 1) * curQSBlockTile + diffS;
@@ -325,7 +337,7 @@ public:
                             gQ[gmOffsetQ],
                             gK[gmOffsetK],
                             gS[gmOffsetS],
-                            gBlockTable[blockBOffset],
+                            gBlockTable[blockBOffset + firstKvPage],
                             layoutQTemp,
                             layoutKTemp,
                             layOutS,
@@ -410,7 +422,8 @@ public:
                             0,
                             qSBlockSize,
                             qNBlockSize,
-                            curStackTileMod);
+                            curStackTileMod,
+                            kvSIdx == 0 ? firstPagePrefix : 0);
                     }
                     Arch::CrossCoreSetFlag<0x2, PIPE_MTE3>(softmaxReady);
     #endif
@@ -436,7 +449,7 @@ public:
                             gP[gmOffsetP],
                             gV[gmOffsetV],
                             gOTmp[gmOffsetOTmp],
-                            gBlockTable[blockBOffset],
+                            gBlockTable[blockBOffset + firstKvPage],
                             layoutPTemp,
                             layoutVTemp,
                             layoutOTmp,
@@ -565,7 +578,8 @@ __global__ __aicore__ void FAInfer(GM_ADDR q,
                             GM_ADDR p,
                             GM_ADDR oTemp,
                             GM_ADDR oUpdate,
-                            GM_ADDR tiling
+                            GM_ADDR tiling,
+                            GM_ADDR kv_starts = nullptr
 )
 {
     using ArchTag = Arch::AtlasA2;
@@ -601,8 +615,11 @@ __global__ __aicore__ void FAInfer(GM_ADDR q,
     using DispatchPolicyOnlineSoftmax = Epilogue::EpilogueAtlasA2XFAIOnlineSoftmax<lseMode>;
     using PType = Gemm::GemmType<ElementP, LayoutP>;
     using maskType = Gemm::GemmType<ElementMask, LayoutMask>;
-    using EpilogueOnlineSoftmax =
-        Epilogue::Block::BlockEpilogue<DispatchPolicyOnlineSoftmax, PType, SType, maskType>;
+    using EpilogueOnlineSoftmax = std::conditional_t<
+        maskCategory == FaiKenel::MaskType::NO_MASK,
+        xllm_ops::xfia::WindowOnlineSoftmax<PType, SType, maskType, lseMode>,
+        Epilogue::Block::
+            BlockEpilogue<DispatchPolicyOnlineSoftmax, PType, SType, maskType>>;
 
     using L1TileShapePV = GemmShape<128, 128, 256>;
     using L0TileShapePV = GemmShape<128, 128, 128>;
@@ -615,12 +632,20 @@ __global__ __aicore__ void FAInfer(GM_ADDR q,
     using OType = Gemm::GemmType<ElementO, LayoutO>;
     using OUpdateType = Gemm::GemmType<ElementUpdate, LayoutUpdate>;
     using LseType = Gemm::GemmType<ElementLse, LayoutLse>;
-    using EpilogueRescaleO =
-        Epilogue::Block::BlockEpilogue<DispatchPolicyRescaleO, OType, OTmpType, OUpdateType, LseType>;
+    using EpilogueRescaleO = std::conditional_t<
+        maskCategory == FaiKenel::MaskType::NO_MASK,
+        xllm_ops::xfia::
+            WindowRescaleO<OType, OTmpType, OUpdateType, LseType, lseMode>,
+        Epilogue::Block::BlockEpilogue<DispatchPolicyRescaleO,
+                                       OType,
+                                       OTmpType,
+                                       OUpdateType,
+                                       LseType>>;
 
     using FAInferKernel = FAInferKernel<BlockMmadQK, BlockMmadPV, EpilogueOnlineSoftmax, EpilogueRescaleO,
                                         PagedCacheFlag, maskCategory, inLayout>;
     FAIKernelParams params{q, k, v, mask, blockTables, actualQseqlen, actualKvseqlen, o, s, p, oTemp, oUpdate, tiling};
+    params.kv_starts = kv_starts;
     FAInferKernel flashAttnInfer;
     flashAttnInfer(params);
 }

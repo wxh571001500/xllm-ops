@@ -24,6 +24,8 @@ limitations under the License.
 #include "register/op_def_registry.h"
 #include "tiling/platform/platform_ascendc.h"
 
+#include "mega_chunk_gdn_tiling_a5.inc"
+
 namespace {
 constexpr uint32_t kHeadDim = 128;
 constexpr uint32_t kChunkSize = 128;
@@ -96,6 +98,11 @@ ge::graphStatus FailTiling(const std::string &reason)
 namespace optiling {
 static ge::graphStatus TilingFunc(gert::TilingContext *context)
 {
+    if (platform_ascendc::PlatformAscendC(context->GetPlatformInfo()).GetSocVersion() ==
+        platform_ascendc::SocVersion::ASCEND950) {
+        return gdn_a5_backend::optiling::TilingFunc(context);
+    }
+
     auto platformInfo = platform_ascendc::PlatformAscendC(context->GetPlatformInfo());
     const bool isAscend950 = platformInfo.GetSocVersion() == platform_ascendc::SocVersion::ASCEND950;
     uint32_t blockDim = platformInfo.GetCoreNumAic();

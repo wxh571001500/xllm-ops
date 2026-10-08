@@ -9,6 +9,8 @@
 #include "register/op_def_registry.h"
 #include "tiling/platform/platform_ascendc.h"
 
+#include "mega_gdn_prefill_op_tiling_a5.inc"
+
 namespace {
 constexpr uint64_t kAlignBytes = 512;
 constexpr uint64_t kHeadDim = 128;
@@ -205,6 +207,11 @@ uint64_t CalcUserWorkspaceBytes(uint32_t block_dim, uint32_t matrices,
 namespace optiling {
 static ge::graphStatus TilingFunc(gert::TilingContext *context)
 {
+    if (platform_ascendc::PlatformAscendC(context->GetPlatformInfo()).GetSocVersion() ==
+        platform_ascendc::SocVersion::ASCEND950) {
+        return gdn_a5_backend::optiling::TilingFunc(context);
+    }
+
     auto platform =
         platform_ascendc::PlatformAscendC(context->GetPlatformInfo());
     GdnArchPolicy arch_policy{};

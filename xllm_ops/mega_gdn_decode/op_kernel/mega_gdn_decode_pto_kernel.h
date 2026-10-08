@@ -1,3 +1,7 @@
+// Preserve upstream main for non-A5 targets.
+#if defined(GDN_PREFILL_TARGET_A5) || (defined(__NPU_ARCH__) && __NPU_ARCH__ == 3510) || (defined(__CCE_AICORE__) && __CCE_AICORE__ == 310)
+#include "arch35/mega_gdn_decode_pto_kernel.h"
+#else
 /* Copyright 2026 The xLLM Authors. All Rights Reserved. */
 
 #pragma once
@@ -1588,3 +1592,5 @@ AICORE PTO_INLINE void Run(
 }
 
 }  // namespace mega_gdn_decode_pto
+
+#endif

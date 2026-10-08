@@ -1,3 +1,7 @@
+// Preserve upstream main for non-A5 targets.
+#if defined(GDN_PREFILL_TARGET_A5) || (defined(__NPU_ARCH__) && __NPU_ARCH__ == 3510) || (defined(__CCE_AICORE__) && __CCE_AICORE__ == 310)
+#include "arch35/causal_conv1d.h"
+#else
 /**
  * This program is free software, you can redistribute it and/or modify it.
  * Copyright (c) 2025 Huawei Technologies Co., Ltd.
@@ -1144,3 +1148,5 @@ __aicore__ inline bool CAUSAL_CONV1D_CLASS::IsUpdateSpecDecodingEnabled() const
 
 } // namespace NsCausalConv1d
 #endif // CAUSAL_CONV1D_H
+
+#endif

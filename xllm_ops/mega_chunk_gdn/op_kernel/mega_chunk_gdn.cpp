@@ -1,3 +1,7 @@
+// A5 implementation is isolated; the non-A5 branch is upstream main fee3816.
+#if defined(GDN_PREFILL_TARGET_A5) || (defined(__NPU_ARCH__) && __NPU_ARCH__ == 3510) || (defined(__CCE_AICORE__) && __CCE_AICORE__ == 310)
+#include "arch35/mega_chunk_gdn.cpp"
+#else
 // mega_kernel.cpp — GDN Mega-Kernel (group-value / GQA): all PTO stages in one launch
 //
 // Same pipeline as pto_mega_kernel, but H/Hg are runtime values.
@@ -1262,4 +1266,6 @@ GDN_KERNEL_NAME(GM_ADDR q_ptr, GM_ADDR k_ptr, GM_ADDR v_ptr, GM_ADDR g_in_ptr, G
 #ifdef GDN_COMPUTE_DTYPE_DEFAULTED
 #undef GDN_COMPUTE_DTYPE_DEFAULTED
 #undef GDN_COMPUTE_DTYPE
+#endif
+
 #endif

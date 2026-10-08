@@ -9,6 +9,8 @@
 
 #include "mega_gdn_mtp_decode_tiling.h"
 
+#include "mega_gdn_mtp_decode_tiling_a5.inc"
+
 namespace optiling {
 namespace {
 
@@ -195,6 +197,11 @@ uint64_t GetTilingKey(int64_t speculative_tokens) {
 
 static ge::graphStatus MegaGdnMtpDecodeTiling(
     gert::TilingContext* context) {
+    if (platform_ascendc::PlatformAscendC(context->GetPlatformInfo()).GetSocVersion() ==
+        platform_ascendc::SocVersion::ASCEND950) {
+        return gdn_a5_backend::optiling::MegaGdnMtpDecodeTiling(context);
+    }
+
   ShapeInfo info;
   if (GetShapeInfo(context, info) != ge::GRAPH_SUCCESS) {
     return ge::GRAPH_FAILED;

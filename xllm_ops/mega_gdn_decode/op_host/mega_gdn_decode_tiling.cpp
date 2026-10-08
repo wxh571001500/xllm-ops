@@ -5,6 +5,8 @@
 
 #include "mega_gdn_decode_tiling.h"
 
+#include "mega_gdn_decode_tiling_a5.inc"
+
 namespace optiling {
 
 namespace {
@@ -95,6 +97,11 @@ ge::graphStatus GetShapeInfo(gert::TilingContext* context,
 
 static ge::graphStatus MegaGdnDecodeTiling(gert::TilingContext* context)
 {
+    if (platform_ascendc::PlatformAscendC(context->GetPlatformInfo()).GetSocVersion() ==
+        platform_ascendc::SocVersion::ASCEND950) {
+        return gdn_a5_backend::optiling::MegaGdnDecodeTiling(context);
+    }
+
     int64_t batchSize = 0;
     int64_t convTileCount = 0;
     int64_t numVHeads = 0;
