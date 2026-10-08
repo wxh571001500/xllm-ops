@@ -230,9 +230,17 @@ function(gen_cust_aicpu_kernel_symbol)
   set(ARM_SO_OUTPUT ${CMAKE_BINARY_DIR}/libmath_aicpu_kernels.so)
 
   set(ALL_OBJECTS "")
+  set(EXISTING_AICPU_CUST_OBJ_TARGETS "")
   foreach(tgt IN LISTS AICPU_CUST_OBJ_TARGETS)
-    list(APPEND ALL_OBJECTS $<TARGET_OBJECTS:${tgt}>)
+    if(TARGET ${tgt})
+      list(APPEND ALL_OBJECTS $<TARGET_OBJECTS:${tgt}>)
+      list(APPEND EXISTING_AICPU_CUST_OBJ_TARGETS ${tgt})
+    endif()
   endforeach()
+  if(NOT EXISTING_AICPU_CUST_OBJ_TARGETS)
+    message(STATUS "No selected aicpu cust obj targets found, skipping.")
+    return()
+  endif()
 
   message(STATUS "Linking cust_aicpu_kernels with ARM toolchain: ${ARM_CXX_COMPILER}")
   message(STATUS "Objects: ${ALL_OBJECTS}")
@@ -261,7 +269,7 @@ function(gen_cust_aicpu_kernel_symbol)
       -Wl,--exclude-libs=libbase_ascend_protobuf.a
       -s
       -o ${ARM_SO_OUTPUT}
-    DEPENDS ${AICPU_CUST_OBJ_TARGETS}
+    DEPENDS ${EXISTING_AICPU_CUST_OBJ_TARGETS}
     COMMENT "Linking cust_aicpu_kernels.so using ARM toolchain"
   )
   add_custom_target(cust_aicpu_kernels ALL DEPENDS ${ARM_SO_OUTPUT})

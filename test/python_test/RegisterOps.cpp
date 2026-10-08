@@ -451,7 +451,7 @@ at::Tensor recurrent_gated_delta_rule(
     at::Tensor outResult = at::empty_like(value);
     float scale_real = static_cast<float>(scale.value());
 
-    EXEC_NPU_CMD(aclnnRecurrentGatedDeltaRule, query, key, value, beta, state, actual_seq_lengths, ssm_state_indices,
+    EXEC_NPU_CMD(aclnnXllmRecurrentGatedDeltaRule, query, key, value, beta, state, actual_seq_lengths, ssm_state_indices,
                  g, gk, num_accepted_tokens, scale_real, outResult);
 
     return outResult;

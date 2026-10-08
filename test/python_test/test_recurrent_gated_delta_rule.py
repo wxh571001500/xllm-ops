@@ -68,8 +68,10 @@ def make_inputs(bs, mtp, nk, nv, dk, dv, use_g=True, use_gk=False,
     """Generate inputs on CPU, matching the kernel's expected shapes."""
     torch.manual_seed(seed)
 
-    actual_seq_lengths = torch.ones(bs, dtype=torch.int32) * mtp
-    t = int(actual_seq_lengths.sum().item())
+    # The kernel ABI is [0, len_0, len_1, ...], not cumulative boundaries.
+    actual_seq_lengths = torch.cat((torch.zeros(1, dtype=torch.int32),
+                                    torch.full((bs,), mtp, dtype=torch.int32)))
+    t = int(actual_seq_lengths[1:].sum().item())
 
     state = torch.rand((t, nv, dv, dk), dtype=torch.bfloat16)
     query = torch.nn.functional.normalize(
@@ -79,7 +81,8 @@ def make_inputs(bs, mtp, nk, nv, dk, dv, use_g=True, use_gk=False,
         torch.rand((t, nk, dk), dtype=torch.bfloat16), p=2, dim=-1
     )
     value = torch.rand((t, nv, dv), dtype=torch.bfloat16)
-    beta = torch.rand((t, nv), dtype=torch.bfloat16)
+    # The xLLM A3 recurrent kernel consumes Kimi's sigmoid(beta) in FP32.
+    beta = torch.rand((t, nv), dtype=torch.float32)
     scale = dk ** -0.5
 
     ssm_state_indices = torch.arange(t, dtype=torch.int32)
@@ -130,7 +133,7 @@ def recurrent_gated_delta_rule_golden(
     """
     T, NK, dk = query.shape
     _, NV, dv = value.shape
-    B = actual_seq_lengths.shape[0]
+    B = actual_seq_lengths.shape[0] - 1
 
     # Cast all to float32 for precision
     q_f = query.float() * scale
@@ -145,17 +148,17 @@ def recurrent_gated_delta_rule_golden(
     attn_out = torch.zeros(T, NV, dv, dtype=torch.float32)
     final_state = state_f.clone()
 
-    seq_ptr = int(actual_seq_lengths[0].item())
-    for b in range(1, B):
-        seq_len = int(actual_seq_lengths[b].item())
+    seq_ptr = 0
+    for b in range(B):
         seq0 = seq_ptr
+        seq_len = int(actual_seq_lengths[b + 1].item())
         seq1 = seq0 + seq_len
         seq_ptr = seq1
 
         # Determine which state position to load as initial state
         state_token_idx = seq0
         if num_accepted_tokens is not None:
-            accepted = int(num_accepted_tokens[b - 1].item())
+            accepted = int(num_accepted_tokens[b].item())
             state_token_idx = seq0 + accepted - 1
 
         state_offset = int(ssm_state_indices[state_token_idx].item())

@@ -156,7 +156,7 @@ elif [[ "$SOC_VERSION" =~ ^(ascend)?910b ]]; then
         "multi_latent_attention"
         "pp_matmul_opt"
         "quant_matmul_nz_decode"
-        "recurrent_gated_delta_rule"
+        "xllm_recurrent_gated_delta_rule"
         "replace_token"
         "mtp_prepare_next_draft"
         "select_unshared_kv"
@@ -208,6 +208,7 @@ elif [[ "$SOC_VERSION" =~ ^ascend910_93 ]]; then
         "dispatch_ffn_combine"
         "dispatch_gmm_combine_decode"
         "dequant_swiglu_quant"  ## 已在 CANN 中内置，见 aarch64-linux/include/aclnnop/aclnn_dequant_swiglu_quant.h
+        "dequant_situ_quant"
         "scatter_nd_update_v2"
 
          ### JD's in-house operators ####
@@ -232,7 +233,13 @@ elif [[ "$SOC_VERSION" =~ ^ascend910_93 ]]; then
         "multi_latent_attention"
         "pp_matmul_opt"
         "quant_matmul_nz_decode"
-        "recurrent_gated_delta_rule"
+        "xllm_recurrent_gated_delta_rule"
+        "xllm_kimi_recurrent_kda"
+        "xllm_kimi_causal_conv1d"
+        "xllm_kimi_kda_gate_cumsum"
+        "xllm_kimi_chunk_kda_fwd"
+        "xllm_kimi_kda_layout_swap12"
+        "xllm_kimi_chunk_gated_delta_rule_fwd_h"
         "replace_token"
         "mtp_prepare_next_draft"
         "select_unshared_kv"
