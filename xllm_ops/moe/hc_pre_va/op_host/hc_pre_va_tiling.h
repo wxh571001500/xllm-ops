@@ -87,6 +87,7 @@ REGISTER_TILING_DATA_CLASS(HcPreVa, HcPreVaTilingData)
 // ----------算子CompileInfo定义----------
 struct HcPreVaCompileInfo {
   uint64_t coreNum = 0;
+  uint64_t aicCoreNum = 0;
   uint64_t ubSize = 0;
 };
 

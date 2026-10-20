@@ -16,6 +16,8 @@ Adapted from vllm-ascend csrc/torch_binding.cpp.
 ==============================================================================*/
 #pragma once
 
+#include <cmath>
+
 namespace xllm_ops_hc_pre_va {
 std::tuple<at::Tensor, at::Tensor, at::Tensor> construct_hc_pre_output_tensor(
     const at::Tensor& x,
@@ -208,7 +210,20 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor> hc_pre_va_impl_npu(
     int64_t hc_sinkhorn_iters,
     double norm_eps,
     double hc_eps) {
+  TORCH_CHECK(x.device().type() == torch_npu::utils::get_npu_device_type(),
+              "x must be on an NPU");
   check_hc_pre_shape_and_dtype(x, hc_fn, hc_scale, hc_base, pre_mix, hc_mult);
+  TORCH_CHECK(hc_sinkhorn_iters > 0 && std::isfinite(norm_eps) &&
+                  norm_eps > 0 && std::isfinite(hc_eps) && hc_eps > 0,
+              "iterations and finite epsilon values must be positive");
+  for (const at::Tensor& tensor : {x, hc_fn, hc_scale, hc_base}) {
+    TORCH_CHECK(tensor.device() == x.device() && tensor.is_contiguous(),
+                "all inputs must be contiguous on the same NPU");
+  }
+  if (pre_mix.has_value() && pre_mix->defined()) {
+    TORCH_CHECK(pre_mix->device() == x.device() && pre_mix->is_contiguous(),
+                "pre_mix must be contiguous on the same NPU");
+  }
   return run_hc_pre_fusion(x,
                            hc_fn,
                            hc_scale,

@@ -5,17 +5,27 @@ tests/e2e/nightly/single_node/ops/singlecard_ops/test_npu_hc_pre.py.
 Both the implicit and external-pre-mix cases exercise the four-output hc_pre_va API.
 """
 
+import ctypes
 import gc
+import os
+from pathlib import Path
 
 import torch
 import torch.nn.functional as F
-import torch_npu
 
 import pytest
 
-import custom_ops
+torch_npu = pytest.importorskip("torch_npu")
+custom_ops = pytest.importorskip("custom_ops")
 
-torch_npu.npu.config.allow_internal_format = True
+
+@pytest.fixture(scope="module", autouse=True)
+def _prepare_custom_op() -> None:
+    if not torch_npu.npu.is_available():
+        pytest.skip("An Ascend NPU is required")
+    if torch_npu._C._npu_get_soc_version() != 253:
+        pytest.skip("hc_pre_va tests require an Ascend A3")
+    torch_npu.npu.config.allow_internal_format = True
 
 
 HC_MULT = 4
@@ -255,14 +265,26 @@ def test_hc_pre_va_uses_external_pre_mix(shape):
     torch.npu.reset_peak_memory_stats()
 
 
-@pytest.mark.parametrize("tokens", [1, 6, 33])
+@pytest.mark.parametrize(
+    "tokens,width",
+    [
+        (1, 5120),
+        (6, 5120),
+        (33, 5120),
+        (129, 128),
+        (1025, 128),
+        (129, 127),
+        (129, 129),
+        (8193, 32),
+    ],
+)
 @pytest.mark.parametrize("external_mix", [False, True])
 @torch.inference_mode()
 def test_hc_pre_va_graph_replay_and_determinism(
-    tokens: int, external_mix: bool
+    tokens: int, width: int, external_mix: bool
 ) -> None:
     x, fn, scale, base = (
-        value.npu() for value in _make_hc_pre_inputs((tokens, HC_MULT, 5120))
+        value.npu() for value in _make_hc_pre_inputs((tokens, HC_MULT, width))
     )
     mix = torch.rand(tokens, HC_MULT, device=x.device) if external_mix else None
 
@@ -290,3 +312,223 @@ def test_hc_pre_va_graph_replay_and_determinism(
     torch.npu.synchronize()
     for actual, reference in zip(captured, updated):
         assert torch.equal(actual, reference)
+
+
+@pytest.mark.parametrize("external_mix", [False, True])
+@pytest.mark.parametrize(
+    "shape",
+    [
+        (129, HC_MULT, 128),
+        (1025, HC_MULT, 128),
+        (4097, HC_MULT, 128),
+        (8193, HC_MULT, 32),
+        (129, HC_MULT, 127),
+        (129, HC_MULT, 129),
+        (17, HC_MULT, 7),
+        (17, HC_MULT, 17),
+        (2, 65, HC_MULT, 128),
+        (129, HC_MULT, HIDDEN_SIZE),
+    ],
+)
+@torch.inference_mode()
+def test_hc_pre_va_multiline_and_tail_tiles(
+    shape: tuple[int, ...], external_mix: bool
+) -> None:
+    x, fn, scale, base = _make_hc_pre_inputs(shape)
+    # Different signed magnitudes expose incorrect per-row RMS and gather phases.
+    x = torch.randn(shape, dtype=torch.float32).to(torch.bfloat16)
+    x.mul_(
+        torch.linspace(0.125, 2, x.numel() // (HC_MULT * shape[-1])).reshape(
+            *shape[:-2], 1, 1
+        )
+    )
+    fn.normal_().div_((HC_MULT * shape[-1]) ** 0.5)
+    # Exact HF32 operands isolate layout/RMS errors from conversion rounding.
+    fn = fn.to(torch.bfloat16).float()
+    mix = torch.rand(shape[:-1]) if external_mix else None
+    expected = _hc_pre_cpu(x, fn, scale, base, mix)
+    inputs = tuple(value.npu() for value in (x, fn, scale, base))
+    actual = custom_ops.hc_pre_va_npu(
+        *inputs, pre_mix=mix.npu() if mix is not None else None
+    )
+    for index, (value, reference) in enumerate(zip(actual, expected)):
+        assert torch.isfinite(value).all()
+        _assert_close_with_pass_rate(
+            value,
+            reference,
+            diff_threshold=Y_DIFF_THRESHOLD if index == 0 else AUX_DIFF_THRESHOLD,
+            required_pass_rate=Y_REQUIRED_PASS_RATE
+            if index == 0
+            else AUX_REQUIRED_PASS_RATE,
+        )
+    if mix is None:
+        explicit = custom_ops.hc_pre_va_npu(*inputs, pre_mix=actual[3])
+        for value, reference in zip(explicit, actual):
+            assert torch.equal(value, reference)
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        {"hc_sinkhorn_iters": 0},
+        {"hc_sinkhorn_iters": -1},
+        {"norm_eps": 0.0},
+        {"norm_eps": -1.0},
+        {"norm_eps": float("nan")},
+        {"norm_eps": float("inf")},
+        {"hc_eps": 0.0},
+        {"hc_eps": -1.0},
+        {"hc_eps": float("nan")},
+        {"hc_eps": float("inf")},
+    ],
+)
+def test_hc_pre_va_rejects_invalid_attributes(invalid: dict[str, object]) -> None:
+    hidden, fn, scale, base = _make_hc_pre_inputs((2, HC_MULT, 128))
+    arguments = dict(
+        zip(
+            ("hidden", "hc_fn", "hc_scale", "hc_base"),
+            (v.npu() for v in (hidden, fn, scale, base)),
+        )
+    )
+    with pytest.raises(RuntimeError, match="iterations and finite epsilon"):
+        custom_ops.hc_pre_va_npu(**arguments, **invalid)
+
+
+def _workspace_status(
+    shape: tuple[int, ...],
+    hc_mult: int = 4,
+    iterations: int = 20,
+    norm_eps: float = 1e-6,
+    hc_eps: float = 1e-6,
+) -> int:
+    vendor_paths = os.environ.get("ASCEND_CUSTOM_OPP_PATH", "").split(os.pathsep)
+    libraries = [
+        Path(path) / "op_api/lib/libcust_opapi.so" for path in vendor_paths if path
+    ]
+    library = next((path for path in libraries if path.is_file()), None)
+    if library is None:
+        raise RuntimeError(
+            "ASCEND_CUSTOM_OPP_PATH must select the isolated test operator package"
+        )
+    metadata = ctypes.CDLL("libopapi.so")
+    operation = ctypes.CDLL(str(library))
+    pointer = ctypes.c_void_p
+    dimensions_pointer = ctypes.POINTER(ctypes.c_int64)
+    metadata.aclCreateTensor.argtypes = [
+        dimensions_pointer,
+        ctypes.c_uint64,
+        ctypes.c_int,
+        dimensions_pointer,
+        ctypes.c_int64,
+        ctypes.c_int,
+        dimensions_pointer,
+        ctypes.c_uint64,
+        pointer,
+    ]
+    metadata.aclCreateTensor.restype = pointer
+    metadata.aclDestroyTensor.argtypes = [pointer]
+    metadata.aclDestroyTensor.restype = ctypes.c_int
+    workspace_size = operation.aclnnHcPreVaGetWorkspaceSize
+    workspace_size.argtypes = (
+        [pointer] * 5
+        + [ctypes.c_int64] * 2
+        + [ctypes.c_double] * 2
+        + [pointer] * 4
+        + [ctypes.POINTER(ctypes.c_uint64), ctypes.POINTER(pointer)]
+    )
+    workspace_size.restype = ctypes.c_int
+    tensors = (
+        torch.empty(shape, dtype=torch.bfloat16, device="npu"),
+        torch.empty((24, shape[-2] * shape[-1]), dtype=torch.float32, device="npu"),
+        torch.empty(3, dtype=torch.float32, device="npu"),
+        torch.empty(24, dtype=torch.float32, device="npu"),
+        torch.empty((*shape[:-2], shape[-1]), dtype=torch.bfloat16, device="npu"),
+        torch.empty((*shape[:-2], HC_MULT), dtype=torch.float32, device="npu"),
+        torch.empty((*shape[:-2], HC_MULT, HC_MULT), dtype=torch.float32, device="npu"),
+        torch.empty((*shape[:-2], HC_MULT), dtype=torch.float32, device="npu"),
+    )
+    descriptors = []
+    try:
+        for tensor in tensors:
+            dimensions = (ctypes.c_int64 * tensor.dim())(*tensor.shape)
+            strides = (ctypes.c_int64 * tensor.dim())(*tensor.stride())
+            descriptor = metadata.aclCreateTensor(
+                dimensions,
+                tensor.dim(),
+                27 if tensor.dtype == torch.bfloat16 else 0,
+                strides,
+                tensor.storage_offset(),
+                2,
+                dimensions,
+                tensor.dim(),
+                tensor.data_ptr(),
+            )
+            assert descriptor is not None
+            descriptors.append(descriptor)
+        size = ctypes.c_uint64()
+        executor = pointer()
+        return workspace_size(
+            *descriptors[:4],
+            None,
+            hc_mult,
+            iterations,
+            hc_eps,
+            norm_eps,
+            *descriptors[4:],
+            ctypes.byref(size),
+            ctypes.byref(executor),
+        )
+    finally:
+        for descriptor in descriptors:
+            metadata.aclDestroyTensor(descriptor)
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    (
+        {"shape": (2, 3, 128)},
+        {"shape": (2, 4, 128), "hc_mult": 3},
+        {"shape": (2, 4, 128), "iterations": 0},
+        {"shape": (2, 4, 128), "iterations": -1},
+        {"shape": (2, 4, 128), "norm_eps": 0.0},
+        {"shape": (2, 4, 128), "hc_eps": float("nan")},
+    ),
+)
+def test_hc_pre_va_direct_aclnn_rejects_invalid_attributes(
+    invalid: dict[str, object],
+) -> None:
+    assert _workspace_status(**invalid) != 0
+
+
+@pytest.mark.parametrize("shape", ((2, 4, 128), (1, 2, 4, 128)))
+def test_hc_pre_va_direct_aclnn_accepts_valid_attributes(
+    shape: tuple[int, ...],
+) -> None:
+    assert _workspace_status(shape) == 0
+
+
+@pytest.mark.parametrize("soc", [220, 250])
+def test_hc_pre_va_skips_non_a3(soc: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(torch_npu.npu, "is_available", lambda: True)
+    monkeypatch.setattr(torch_npu._C, "_npu_get_soc_version", lambda: soc)
+    with pytest.raises(pytest.skip.Exception, match="Ascend A3"):
+        _prepare_custom_op.__wrapped__()
+
+
+@pytest.mark.parametrize("shape", [(129, HC_MULT, 128), (1024, HC_MULT, 4096)])
+@torch.inference_mode()
+def test_hc_pre_va_pre_output_buffer_reuse(shape: tuple[int, ...]) -> None:
+    hidden, fn, scale, base = _make_hc_pre_inputs(shape)
+    hidden.normal_()
+    fn.normal_().div_((HC_MULT * shape[-1]) ** 0.5)
+    arguments = tuple(value.npu() for value in (hidden, fn, scale, base))
+    baseline = None
+    for _ in range(5):
+        outputs = custom_ops.hc_pre_va_npu(*arguments, hc_sinkhorn_iters=1)
+        torch.npu.synchronize()
+        actual = tuple(value.cpu() for value in outputs)
+        assert all(torch.isfinite(value).all() for value in actual)
+        if baseline is not None:
+            for value, reference in zip(actual, baseline):
+                assert torch.equal(value, reference)
+        baseline = actual

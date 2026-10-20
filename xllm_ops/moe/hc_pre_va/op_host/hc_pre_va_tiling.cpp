@@ -17,6 +17,7 @@
 
 #include "hc_pre_va_tiling.h"
 
+#include <cmath>
 #include <sstream>
 
 using namespace ge;
@@ -41,6 +42,7 @@ constexpr int64_t BLOCK_SIZE = 32;
 constexpr int64_t REPEAT_SIZE = 256;
 constexpr int64_t UB_RESEVED_SIZE = 8192;
 constexpr int64_t DOUBLE_BUFFER = 2;
+constexpr int64_t MAX_VECTOR_REPEAT = 255;
 constexpr uint64_t M_L1_MAX_SIZE = 256;
 constexpr uint64_t K_MULIT_CORE_SPLIT_BASE_SIZE = 256;
 constexpr uint64_t A_L1_SIZE = 128 * 256;
@@ -61,6 +63,7 @@ ge::graphStatus HcPreVaTiling::GetPlatformInfo() {
                OPS_LOG_E(context_, "compile info is null"),
                return ge::GRAPH_FAILED);
     aivCoreNum_ = compileInfoPtr->coreNum;
+    aicCoreNum_ = compileInfoPtr->aicCoreNum;
     ubSize_ = compileInfoPtr->ubSize;
   } else {
     auto ascendcPlatform = platform_ascendc::PlatformAscendC(platformInfo);
@@ -71,6 +74,11 @@ ge::graphStatus HcPreVaTiling::GetPlatformInfo() {
                                    ubSizePlatForm);
     ubSize_ = ubSizePlatForm;
   }
+  OPS_ERR_IF(
+      aivCoreNum_ == 0 || aicCoreNum_ == 0 || ubSize_ == 0,
+      OPS_LOG_E(context_->GetNodeName(),
+                "AIV core count, AIC core count and UB size must be positive"),
+      return ge::GRAPH_FAILED);
   return ge::GRAPH_SUCCESS;
 }
 
@@ -79,16 +87,29 @@ ge::graphStatus HcPreVaTiling::GetAttr() {
   OPS_LOG_E_IF_NULL(context_, attrs, return ge::GRAPH_FAILED);
 
   auto hcMultAttr = attrs->GetAttrPointer<int64_t>(HC_MULT_ATTR_IDX);
-  hcMult_ = hcMultAttr == nullptr ? 4 : *hcMultAttr;
+  const int64_t hc_mult_attribute = hcMultAttr == nullptr ? 4 : *hcMultAttr;
+  OPS_ERR_IF(hcMult_ != 4 || hc_mult_attribute != hcMult_,
+             OPS_LOG_E(context_->GetNodeName(),
+                       "x streams and hc_mult must both equal 4"),
+             return ge::GRAPH_FAILED);
 
   auto iterTimesAttr = attrs->GetAttrPointer<int64_t>(ITER_TIMES_ATTR_IDX);
   iterTimes_ = iterTimesAttr == nullptr ? DEFAULT_ITER_TIMES : *iterTimesAttr;
+  OPS_ERR_IF(
+      iterTimes_ <= 0,
+      OPS_LOG_E(context_->GetNodeName(), "hc_sinkhorn_iters must be positive"),
+      return ge::GRAPH_FAILED);
 
   auto hcEpsAttr = attrs->GetAttrPointer<float>(HC_EPS_ATTR_IDX);
   hcEps_ = hcEpsAttr == nullptr ? 1e-6 : *hcEpsAttr;
 
   auto normEpsAttr = attrs->GetAttrPointer<float>(NORM_EPS_ATTR_IDX);
   normEps_ = normEpsAttr == nullptr ? 1e-6 : *normEpsAttr;
+  OPS_ERR_IF(!std::isfinite(hcEps_) || hcEps_ <= 0 ||
+                 !std::isfinite(normEps_) || normEps_ <= 0,
+             OPS_LOG_E(context_->GetNodeName(),
+                       "hc_eps and norm_eps must be finite and positive"),
+             return ge::GRAPH_FAILED);
   return ge::GRAPH_SUCCESS;
 }
 
@@ -97,6 +118,15 @@ ge::graphStatus HcPreVaTiling::GetShapeAttrsInfoInner() {
   auto xShape = context_->GetInputShape(0);
   OPS_LOG_E_IF_NULL(context_, xShape, return ge::GRAPH_FAILED);
   size_t xDimNum = xShape->GetStorageShape().GetDimNum();
+  OPS_ERR_IF(xDimNum != 3 && xDimNum != 4,
+             OPS_LOG_E(context_->GetNodeName(), "x rank must be 3 or 4"),
+             return ge::GRAPH_FAILED);
+  for (size_t dimension = 0; dimension < xDimNum; ++dimension) {
+    OPS_ERR_IF(
+        xShape->GetStorageShape().GetDim(dimension) <= 0,
+        OPS_LOG_E(context_->GetNodeName(), "x dimensions must be positive"),
+        return ge::GRAPH_FAILED);
+  }
   if (xDimNum == 3) {
     bs_ = xShape->GetStorageShape().GetDim(0);
     hcMult_ = xShape->GetStorageShape().GetDim(1);
@@ -110,7 +140,14 @@ ge::graphStatus HcPreVaTiling::GetShapeAttrsInfoInner() {
   }
 
   auto shapeHcFn = context_->GetInputShape(1);
+  OPS_LOG_E_IF_NULL(context_, shapeHcFn, return ge::GRAPH_FAILED);
+  OPS_ERR_IF(shapeHcFn->GetStorageShape().GetDimNum() != 2,
+             OPS_LOG_E(context_->GetNodeName(), "hc_fn must have rank 2"),
+             return ge::GRAPH_FAILED);
   hcMix_ = shapeHcFn->GetStorageShape().GetDim(0);
+  OPS_ERR_IF(hcMix_ != 24,
+             OPS_LOG_E(context_->GetNodeName(), "hc_fn must have 24 rows"),
+             return ge::GRAPH_FAILED);
   OPS_ERR_IF(
       shapeHcFn->GetStorageShape().GetDim(1) != d_ * hcMult_,
       OPS_LOG_E(context_->GetNodeName(),
@@ -120,6 +157,10 @@ ge::graphStatus HcPreVaTiling::GetShapeAttrsInfoInner() {
       return ge::GRAPH_FAILED);
 
   auto shapeHcScale = context_->GetInputShape(2);
+  OPS_LOG_E_IF_NULL(context_, shapeHcScale, return ge::GRAPH_FAILED);
+  OPS_ERR_IF(shapeHcScale->GetStorageShape().GetDimNum() != 1,
+             OPS_LOG_E(context_->GetNodeName(), "hc_scale must have rank 1"),
+             return ge::GRAPH_FAILED);
   int64_t scaleFirstDim = shapeHcScale->GetStorageShape().GetDim(0);
   OPS_ERR_IF(scaleFirstDim != 3,
              OPS_LOG_E(context_->GetNodeName(),
@@ -128,6 +169,10 @@ ge::graphStatus HcPreVaTiling::GetShapeAttrsInfoInner() {
              return ge::GRAPH_FAILED);
 
   auto shapeHcBase = context_->GetInputShape(3);
+  OPS_LOG_E_IF_NULL(context_, shapeHcBase, return ge::GRAPH_FAILED);
+  OPS_ERR_IF(shapeHcBase->GetStorageShape().GetDimNum() != 1,
+             OPS_LOG_E(context_->GetNodeName(), "hc_base must have rank 1"),
+             return ge::GRAPH_FAILED);
   int64_t baseFirstDim = shapeHcBase->GetStorageShape().GetDim(0);
   OPS_ERR_IF(baseFirstDim != hcMix_,
              OPS_LOG_E(context_->GetNodeName(),
@@ -137,6 +182,20 @@ ge::graphStatus HcPreVaTiling::GetShapeAttrsInfoInner() {
 
   // 可选输入 pre_mix: [bs, hc_mult] fp32
   tilingData_.set_hasPreMix(context_->GetInputShape(4) != nullptr ? 1 : 0);
+  auto pre_mix_shape = context_->GetInputShape(4);
+  if (pre_mix_shape != nullptr) {
+    OPS_ERR_IF(pre_mix_shape->GetStorageShape().GetDimNum() != xDimNum - 1,
+               OPS_LOG_E(context_->GetNodeName(),
+                         "pre_mix rank must equal x rank minus one"),
+               return ge::GRAPH_FAILED);
+    for (size_t dimension = 0; dimension + 1 < xDimNum; ++dimension) {
+      OPS_ERR_IF(pre_mix_shape->GetStorageShape().GetDim(dimension) !=
+                     xShape->GetStorageShape().GetDim(dimension),
+                 OPS_LOG_E(context_->GetNodeName(),
+                           "pre_mix shape must equal x shape without D"),
+                 return ge::GRAPH_FAILED);
+    }
+  }
   // 可选输出 pre: 内部计算的 pre 结果拷出
   tilingData_.set_hasPreOut(context_->GetOutputShape(3) != nullptr ? 1 : 0);
 
@@ -156,6 +215,8 @@ ge::graphStatus HcPreVaTiling::CalcMKSplitCoreMembasePart2Tiling() {
   int64_t minRowPerCore = 1;
   int64_t rowOnceLoop = std::min(rowOfFormerBlock_, minRowPerCore);
   int64_t kBlockNum = tilingData_.get_cubeBlockDimK();
+  const int64_t available_ub_size =
+      static_cast<int64_t>(ubSize_) - UB_RESEVED_SIZE;
 
   hcMultAlign_ = RoundUp(hcMult_, BLOCK_SIZE / sizeof(float));
   int64_t mix0OriginSize =
@@ -180,31 +241,38 @@ ge::graphStatus HcPreVaTiling::CalcMKSplitCoreMembasePart2Tiling() {
   int64_t base0Size = hcMultAlign_ * sizeof(float);
   int64_t base1Size = hcMultAlign_ * sizeof(float);
   int64_t base2Size = hcMult_ * hcMultAlign_ * sizeof(float);
-  int64_t xCastSize = rowOnceLoop * hcMult_ * RoundUp(d_, 8) * sizeof(float);
-  int64_t yCastSize = rowOnceLoop * RoundUp(d_, 8) * sizeof(float);
+  int64_t xCastSize = rowOnceLoop * hcMult_ * RoundUp(d_, 16) * sizeof(float);
+  int64_t yCastSize = rowOnceLoop * RoundUp(d_, 16) * sizeof(float);
   int64_t rowBrcb0Size = RoundUp(rowOnceLoop, 8) * BLOCK_SIZE;
   int64_t hcBrcb1Size = RoundUp(rowOnceLoop * hcMultAlign_, 8) * BLOCK_SIZE;
   int64_t reduceBufSize = rowOnceLoop * hcMultAlign_ * sizeof(float);
   int64_t maskPatternSize = BLOCK_SIZE * 16;
+  int64_t squareReduceSize = rowOnceLoop * 16 * sizeof(float);
+  int64_t preMixSize = rowOnceLoop * hcMultAlign_ * sizeof(float);
 
-  int64_t totalSize =
-      mix0OriginSize + mix1OriginSize + mix2OriginSize + mix0Size + mix1Size +
-      mix2Size + squareSumSize + rsqrtSize + xSize + ySize + postSize +
-      combFragSize + base0Size + base1Size + base2Size + xCastSize + yCastSize +
-      rowBrcb0Size + hcBrcb1Size + reduceBufSize + maskPatternSize;
+  int64_t totalSize = mix0OriginSize + mix1OriginSize + mix2OriginSize +
+                      mix0Size + mix1Size + mix2Size + squareSumSize +
+                      rsqrtSize + xSize + ySize + postSize + combFragSize +
+                      base0Size + base1Size + base2Size + xCastSize +
+                      yCastSize + rowBrcb0Size + hcBrcb1Size + reduceBufSize +
+                      maskPatternSize + squareReduceSize + preMixSize;
   rowFactor_ = rowOnceLoop;
-  if (totalSize <= ubSize_) {
+  if (totalSize <= available_ub_size) {
     // row和d均可以在ub内全载
     dLoop_ = 1;
     dFactor_ = d_;
     tailDFactor_ = dFactor_;
   } else {
-    int64_t usedUbSize = mix0OriginSize + mix1OriginSize + mix2OriginSize +
-                         mix0Size + mix1Size + mix2Size + squareSumSize +
-                         rsqrtSize + postSize + combFragSize + base0Size +
-                         base1Size + base2Size + rowBrcb0Size + hcBrcb1Size +
-                         reduceBufSize + maskPatternSize;
-    int64_t ubRemain = ubSize_ - usedUbSize;
+    int64_t usedUbSize =
+        mix0OriginSize + mix1OriginSize + mix2OriginSize + mix0Size + mix1Size +
+        mix2Size + squareSumSize + rsqrtSize + postSize + combFragSize +
+        base0Size + base1Size + base2Size + rowBrcb0Size + hcBrcb1Size +
+        reduceBufSize + maskPatternSize + squareReduceSize + preMixSize;
+    int64_t ubRemain = available_ub_size - usedUbSize;
+    OPS_ERR_IF(ubRemain <= 0,
+               OPS_LOG_E(context_->GetNodeName(),
+                         "stage 2 buffers exceed available UB"),
+               return ge::GRAPH_FAILED);
     dFactor_ = d_;
     int64_t base = 2;
     while (1) {
@@ -212,12 +280,16 @@ ge::graphStatus HcPreVaTiling::CalcMKSplitCoreMembasePart2Tiling() {
       xSize = rowOnceLoop * hcMult_ * RoundUp(dFactor_, 16) * 2 *
               DOUBLE_BUFFER;  // x是bfloat16_t 类型
       ySize = rowOnceLoop * RoundUp(dFactor_, 16) * 2 * DOUBLE_BUFFER;
-      xCastSize = rowOnceLoop * hcMult_ * RoundUp(dFactor_, 8) * sizeof(float);
-      yCastSize = rowOnceLoop * RoundUp(dFactor_, 8) * sizeof(float);
+      xCastSize = rowOnceLoop * hcMult_ * RoundUp(dFactor_, 16) * sizeof(float);
+      yCastSize = rowOnceLoop * RoundUp(dFactor_, 16) * sizeof(float);
       int64_t targetSize = xSize + ySize + xCastSize + yCastSize;
       if (targetSize <= ubRemain) {
         break;
       }
+      OPS_ERR_IF(dFactor_ == 1,
+                 OPS_LOG_E(context_->GetNodeName(),
+                           "a single hidden column does not fit in UB"),
+                 return ge::GRAPH_FAILED);
       base++;
     }
     if (dFactor_ > 32) {
@@ -227,9 +299,12 @@ ge::graphStatus HcPreVaTiling::CalcMKSplitCoreMembasePart2Tiling() {
     tailDFactor_ = d_ % dFactor_ == 0 ? dFactor_ : d_ % dFactor_;
   }
 
+  // Softmax reduces hcMult rows per token; vector repeats are limited to 255.
+  const int64_t maxRowFactor =
+      std::min(rowOfFormerBlock_, MAX_VECTOR_REPEAT / hcMult_);
   // d全载,尝试搬入更多的bs
   if (dFactor_ == d_) {
-    while (rowFactor_ <= rowOfFormerBlock_) {
+    while (rowFactor_ <= maxRowFactor) {
       mix0OriginSize =
           kBlockNum * rowFactor_ * hcMultAlign_ * sizeof(float) * DOUBLE_BUFFER;
       mix1OriginSize =
@@ -249,24 +324,26 @@ ge::graphStatus HcPreVaTiling::CalcMKSplitCoreMembasePart2Tiling() {
       postSize = rowFactor_ * hcMultAlign_ * sizeof(float) * DOUBLE_BUFFER;
       combFragSize =
           rowFactor_ * hcMult_ * hcMultAlign_ * sizeof(float) * DOUBLE_BUFFER;
-      xCastSize = rowFactor_ * hcMult_ * RoundUp(d_, 8) * sizeof(float);
-      yCastSize = rowFactor_ * RoundUp(d_, 8) * sizeof(float);
+      xCastSize = rowFactor_ * hcMult_ * RoundUp(d_, 16) * sizeof(float);
+      yCastSize = rowFactor_ * RoundUp(d_, 16) * sizeof(float);
       rowBrcb0Size = RoundUp(rowFactor_, 8) * BLOCK_SIZE;
       hcBrcb1Size = RoundUp(rowFactor_ * hcMultAlign_, 8) * BLOCK_SIZE;
       reduceBufSize = rowFactor_ * hcMultAlign_ * sizeof(float);
-      maskPatternSize = BLOCK_SIZE;
+      squareReduceSize = rowFactor_ * 16 * sizeof(float);
+      preMixSize = rowFactor_ * hcMultAlign_ * sizeof(float);
       totalSize = mix0OriginSize + mix1OriginSize + mix2OriginSize + mix0Size +
                   mix1Size + mix2Size + squareSumSize + rsqrtSize + xSize +
                   ySize + postSize + combFragSize + base0Size + base1Size +
                   base2Size + xCastSize + yCastSize + rowBrcb0Size +
-                  hcBrcb1Size + reduceBufSize + maskPatternSize;
-      if (totalSize > ubSize_) {
+                  hcBrcb1Size + reduceBufSize + maskPatternSize +
+                  squareReduceSize + preMixSize;
+      if (totalSize > available_ub_size) {
         rowFactor_ = rowFactor_ - 1;
         break;
       }
       rowFactor_ = rowFactor_ + 1;
     }
-    rowFactor_ = rowFactor_ > rowOfFormerBlock_ ? rowFactor_ - 1 : rowFactor_;
+    rowFactor_ = rowFactor_ > maxRowFactor ? rowFactor_ - 1 : rowFactor_;
   }
   rowLoopOfFormerBlock_ = CeilDiv(rowOfFormerBlock_, rowFactor_);
   rowLoopOfTailBlock_ = CeilDiv(rowOfTailBlock_, rowFactor_);
@@ -394,7 +471,25 @@ ge::graphStatus HcPreVaTiling::PostTiling() {
 }
 
 ge::graphStatus TilingPrepareForHcPreVa(gert::TilingParseContext* context) {
-  (void)context;
+  OPS_ERR_IF(
+      context == nullptr,
+      OPS_REPORT_VECTOR_INNER_ERR("HcPreVa", "Tiling parse context is null"),
+      return ge::GRAPH_FAILED);
+  auto compileInfo = context->GetCompiledInfo<HcPreVaCompileInfo>();
+  OPS_LOG_E_IF_NULL(context, compileInfo, return ge::GRAPH_FAILED);
+  auto platformInfo = context->GetPlatformInfo();
+  OPS_LOG_E_IF_NULL(context, platformInfo, return ge::GRAPH_FAILED);
+  auto ascendcPlatform = platform_ascendc::PlatformAscendC(platformInfo);
+  compileInfo->coreNum = ascendcPlatform.GetCoreNumAiv();
+  compileInfo->aicCoreNum = ascendcPlatform.GetCoreNumAic();
+  ascendcPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::UB,
+                                 compileInfo->ubSize);
+  OPS_ERR_IF(
+      compileInfo->coreNum == 0 || compileInfo->aicCoreNum == 0 ||
+          compileInfo->ubSize == 0,
+      OPS_LOG_E(context->GetNodeName(),
+                "AIV core count, AIC core count and UB size must be positive"),
+      return ge::GRAPH_FAILED);
   return ge::GRAPH_SUCCESS;
 }
 
@@ -403,11 +498,6 @@ ge::graphStatus TilingForHcPreVa(gert::TilingContext* context) {
              OPS_REPORT_VECTOR_INNER_ERR("HcPreVa", "Tiling context is null"),
              return ge::GRAPH_FAILED);
 
-  auto platformInfo = context->GetPlatformInfo();
-  OPS_ERR_IF(
-      platformInfo == nullptr,
-      OPS_REPORT_VECTOR_INNER_ERR("HcPreVa", "Tiling platformInfo is null"),
-      return ge::GRAPH_FAILED);
   HcPreVaTiling hcPreTiling(context);
   return hcPreTiling.DoOpTiling();
 }

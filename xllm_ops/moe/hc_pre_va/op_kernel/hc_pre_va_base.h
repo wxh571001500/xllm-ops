@@ -60,12 +60,18 @@ __aicore__ inline int32_t RoundUp(int32_t num) {
 
 __aicore__ inline void SetGatherMaskPattern(
     const LocalTensor<uint32_t>& maskPattern) {
-  uint32_t base = ONE;
   for (uint32_t i = 0; i < 16; i++) {
-    Duplicate(maskPattern[i * 8], base, 8);
-    base = (base << 1);
+    for (uint32_t word = 0; word < 8; ++word) {
+      const uint32_t firstColumn = (i + word * 2) % 16;
+      const uint32_t secondColumn = (firstColumn + 1) % 16;
+      maskPattern.SetValue(i * 8 + word,
+                           (ONE << firstColumn) | (ONE << (16 + secondColumn)));
+    }
   }
-  PipeBarrier<PIPE_V>();
+  const event_t eventId =
+      static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::S_V));
+  SetFlag<HardEvent::S_V>(eventId);
+  WaitFlag<HardEvent::S_V>(eventId);
 }
 
 __aicore__ inline void GatherMaskByDiagonal(
@@ -86,13 +92,15 @@ __aicore__ inline void GatherMaskByDiagonal(
                {1, 1, 8, 8},
                rsvdCnt);
   }
-  GatherMask(output[loopCount * MASK_PATTERN_DIM_SIZE],
-             input[loopCount * totalCount],
-             maskPattern,
-             true,
-             remainCount,
-             {1, 1, 8, 8},
-             rsvdCnt);
+  if (remainCount != 0) {
+    GatherMask(output[loopCount * MASK_PATTERN_DIM_SIZE],
+               input[loopCount * totalCount],
+               maskPattern,
+               true,
+               remainCount,
+               {1, 1, 8, 8},
+               rsvdCnt);
+  }
   PipeBarrier<PIPE_V>();
 }
 
@@ -181,7 +189,7 @@ __aicore__ inline void MulABLastDimBrcInline(const LocalTensor<T>& output,
         instrParams.src1BlkStride = 0;
         instrParams.dstRepStride = dstRepStridePerLine;
         instrParams.src0RepStride = dstRepStridePerLine;
-        instrParams.src1RepStride = 0;
+        instrParams.src1RepStride = 1;
         Mul(output[numRepeatPerLine * elemInOneRepeat],
             input0[numRepeatPerLine * elemInOneRepeat],
             tmpBuffer,
@@ -629,10 +637,23 @@ __aicore__ void inline ProcessY(const LocalTensor<T>& yLocal,
                                 const LocalTensor<float>& yCastLocal,
                                 const uint32_t dim0,
                                 const uint32_t dim1,
-                                const uint32_t dim2) {
+                                const uint32_t dim2,
+                                const uint32_t mixRowStride) {
   CastTwoDim(xCastLocal, xLocal, dim0 * dim1, dim2);
-  MulABLastDimBrcInline<float, true>(
-      xCastLocal, xCastLocal, mix01Local, hcBrcbLocal1, dim0 * dim1, dim2);
+  if (mixRowStride == dim1) {
+    MulABLastDimBrcInline<float, true>(
+        xCastLocal, xCastLocal, mix01Local, hcBrcbLocal1, dim0 * dim1, dim2);
+  } else {
+    const uint32_t hiddenRowStride = dim1 * RoundUp<float>(dim2);
+    for (uint32_t row = 0; row < dim0; ++row) {
+      MulABLastDimBrcInline<float, true>(xCastLocal[row * hiddenRowStride],
+                                         xCastLocal[row * hiddenRowStride],
+                                         mix01Local[row * mixRowStride],
+                                         hcBrcbLocal1,
+                                         dim1,
+                                         dim2);
+    }
+  }
   ReduceSumARAPerf(yCastLocal, xCastLocal, dim0, dim1, dim2);
   CastTwoDim(yLocal, yCastLocal, dim0, dim2);
 }

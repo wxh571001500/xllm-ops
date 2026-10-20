@@ -311,7 +311,7 @@ class HcPreVaMembaseKSplitCorePart2 {
                          tilingData->hcMult * sizeof(float));
     pipe->InitBuffer(
         squareReduceBuf,
-        tilingData->stage2RowFactor * tilingData->hcMultAlign * sizeof(float));
+        tilingData->stage2RowFactor * SQUARE_SUM_SIZE * sizeof(float));
     pipe->InitBuffer(xCastBuf, xQueNum2 * sizeof(float));
     pipe->InitBuffer(yCastBuf,
                      tilingData->stage2RowFactor *
@@ -356,6 +356,9 @@ class HcPreVaMembaseKSplitCorePart2 {
                               GM_ADDR workspace,
                               const HcPreVaTilingData* tilingDataPtr,
                               TPipe* pipePtr) {
+    if ASCEND_IS_AIC {
+      return;
+    }
     pipe = pipePtr;
     tilingData = tilingDataPtr;
     InitGlobalBuffers(
@@ -435,9 +438,8 @@ class HcPreVaMembaseKSplitCorePart2 {
                          1,
                          stage1UsedCoreNum,
                          curRowFactor * SQUARE_SUM_SIZE);
-        int64_t curBsIdxForAll =
-            (stage2BlockIdx * tilingData->rowLoopOfFormerBlock + rowOuterIdx) *
-            tilingData->stage2RowFactor;
+        int64_t curBsIdxForAll = stage2BlockIdx * tilingData->rowOfFormerBlock +
+                                 rowOuterIdx * tilingData->stage2RowFactor;
         GatherMaskByDiagonal(
             rsqrtLocal,
             squareReduceLocal,
@@ -473,7 +475,7 @@ class HcPreVaMembaseKSplitCorePart2 {
             CeilAlign(tilingData->hcMix, WORKSPACE_ALIGN_SIZE / sizeof(float)));
         CopyInWithOuterFor(
             workspaceGm[mixBaseOffset + tilingData->hcMult],
-            mixes01Local[stage1UsedCoreNum * tilingData->stage2RowFactor *
+            mixes01Local[stage1UsedCoreNum * curRowFactor *
                          tilingData->hcMultAlign],
             stage1UsedCoreNum,
             curRowFactor,
@@ -508,8 +510,12 @@ class HcPreVaMembaseKSplitCorePart2 {
                             tilingData->hcMult +
                         rowOuterIdx * tilingData->stage2RowFactor *
                             tilingData->hcMult],
-                  1,
-                  curRowFactor * tilingData->hcMult);
+                  curRowFactor,
+                  tilingData->hcMult);
+          event_t eventIdPreDone = static_cast<event_t>(
+              GetTPipePtr()->FetchEventID(HardEvent::MTE3_V));
+          SetFlag<HardEvent::MTE3_V>(eventIdPreDone);
+          WaitFlag<HardEvent::MTE3_V>(eventIdPreDone);
         }
         if (tilingData->hasPreMix != 0) {
           CopyIn(preMixGm[stage2BlockIdx * tilingData->rowOfFormerBlock *
@@ -532,7 +538,7 @@ class HcPreVaMembaseKSplitCorePart2 {
           CopyIn(xGm[xGmBlockBaseOffsetPart2 + xGmBsBaseOffsetPart2 +
                      dLoopIdx * tilingData->dFactor],
                  xLocal,
-                 tilingData->stage2RowFactor * tilingData->hcMult,
+                 curRowFactor * tilingData->hcMult,
                  curDFactor,
                  tilingData->d - curDFactor);
           xQue.template EnQue(xLocal);
@@ -547,7 +553,9 @@ class HcPreVaMembaseKSplitCorePart2 {
               yCastLocal,
               curRowFactor,
               tilingData->hcMult,
-              curDFactor);
+              curDFactor,
+              tilingData->hasPreMix != 0 ? tilingData->hcMult
+                                         : tilingData->hcMultAlign);
           xQue.template FreeTensor(xLocal);
           yQue.template EnQue(yLocal);
           yLocal = yQue.template DeQue<T>();
@@ -565,8 +573,7 @@ class HcPreVaMembaseKSplitCorePart2 {
         // post
         postLocal = postQue.AllocTensor<float>();
         ProcessPost(postLocal,
-                    mixes01ReduceLocal[tilingData->stage2RowFactor *
-                                       tilingData->hcMultAlign],
+                    mixes01ReduceLocal[curRowFactor * tilingData->hcMultAlign],
                     hcBase1Local,
                     rsqrtLocal,
                     rowBrcbLocal0,
