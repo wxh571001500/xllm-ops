@@ -13,9 +13,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
+#include <dlfcn.h>
 #include <torch/library.h>
 
-#include <dlfcn.h>
+#include <cmath>
 
 #include "acl/acl_rt.h"
 #include "pytorch_npu_helper.hpp"

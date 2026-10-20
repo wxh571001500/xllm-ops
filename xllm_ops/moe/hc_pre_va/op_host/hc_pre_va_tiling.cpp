@@ -70,7 +70,6 @@ ge::graphStatus HcPreVaTiling::GetPlatformInfo() {
     ascendcPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::UB,
                                    ubSizePlatForm);
     ubSize_ = ubSizePlatForm;
-    socVersion_ = ascendcPlatform.GetSocVersion();
   }
   return ge::GRAPH_SUCCESS;
 }
@@ -405,10 +404,10 @@ ge::graphStatus TilingForHcPreVa(gert::TilingContext* context) {
              return ge::GRAPH_FAILED);
 
   auto platformInfo = context->GetPlatformInfo();
-  OPS_ERR_IF(platformInfo == nullptr,
-             OPS_REPORT_VECTOR_INNER_ERR("TilingForMoeGatingTopKHash",
-                                         "Tiling platformInfo is null"),
-             return ge::GRAPH_FAILED);
+  OPS_ERR_IF(
+      platformInfo == nullptr,
+      OPS_REPORT_VECTOR_INNER_ERR("HcPreVa", "Tiling platformInfo is null"),
+      return ge::GRAPH_FAILED);
   HcPreVaTiling hcPreTiling(context);
   return hcPreTiling.DoOpTiling();
 }

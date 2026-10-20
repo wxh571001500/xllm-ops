@@ -11,12 +11,12 @@
  */
 
 /*!
- * \file hc_pre_va_m_split_core.h
+ * \file hc_pre_va_m_k_split_core.h
  * \brief
  */
 
-#ifndef HC_PRE_VA_M_K_SPLIT_A3_CORE_H
-#define HC_PRE_VA_M_K_SPLIT_A3_CORE_H
+#ifndef HC_PRE_VA_M_K_SPLIT_CORE_H
+#define HC_PRE_VA_M_K_SPLIT_CORE_H
 
 #include "hc_pre_va_base.h"
 #include "hc_pre_va_cube_compute.h"
@@ -274,10 +274,6 @@ class HcPreVaMembaseKSplitCorePart2 {
                      stage1UsedCoreNum * tilingData->stage2RowFactor *
                          SQUARE_SUM_SIZE * sizeof(float));
     pipe->InitBuffer(xQue, NUM_TWO, xQueNum2 * sizeof(T));
-    pipe->InitBuffer(squareSumQue,
-                     NUM_TWO,
-                     stage1UsedCoreNum * tilingData->stage2RowFactor *
-                         SQUARE_SUM_SIZE * sizeof(float));
     pipe->InitBuffer(yQue,
                      NUM_TWO,
                      tilingData->stage2RowFactor *

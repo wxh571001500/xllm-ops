@@ -15,8 +15,8 @@
  * \brief
  */
 
-#ifndef HC_PRE_VA_SINKHORN_TILING_H
-#define HC_PRE_VA_SINKHORN_TILING_H
+#ifndef HC_PRE_VA_TILING_H
+#define HC_PRE_VA_TILING_H
 
 #include <iostream>
 #include <vector>
@@ -53,7 +53,6 @@ TILING_DATA_FIELD_DEF(int64_t, rowOfFormerBlock);
 TILING_DATA_FIELD_DEF(int64_t, rowOfTailBlock);
 TILING_DATA_FIELD_DEF(int64_t, rowLoopOfFormerBlock);
 TILING_DATA_FIELD_DEF(int64_t, rowLoopOfTailBlock);
-TILING_DATA_FIELD_DEF(int64_t, rowFactor);
 TILING_DATA_FIELD_DEF(int64_t, tailRowFactorOfFormerBlock);
 TILING_DATA_FIELD_DEF(int64_t, tailRowFactorOfTailBlock);
 TILING_DATA_FIELD_DEF(int64_t, dLoop);
@@ -62,45 +61,22 @@ TILING_DATA_FIELD_DEF(int64_t, tailDFactor);
 TILING_DATA_FIELD_DEF(int64_t, iterTimes);
 TILING_DATA_FIELD_DEF(float, hcEps);
 TILING_DATA_FIELD_DEF(float, normEps);
-TILING_DATA_FIELD_DEF(int64_t, kBlockFactor);
-TILING_DATA_FIELD_DEF(int64_t, kFactor);
-TILING_DATA_FIELD_DEF(int64_t, tailKFactor);
-TILING_DATA_FIELD_DEF(int64_t, kLoop);
 TILING_DATA_FIELD_DEF(int64_t, stage2RowFactor);
 
 TILING_DATA_FIELD_DEF(int64_t, k);
-TILING_DATA_FIELD_DEF(int64_t, kLoopOfFormerBlock);
-TILING_DATA_FIELD_DEF(int64_t, kLoopOfTailBlock);
-TILING_DATA_FIELD_DEF(int64_t, stage1KFactor);
-TILING_DATA_FIELD_DEF(int64_t, kFactorOfFormerBlock);
 TILING_DATA_FIELD_DEF(int64_t, kL1Size);
 TILING_DATA_FIELD_DEF(int64_t, mL1Size);
 TILING_DATA_FIELD_DEF(int64_t, cubeBlockDimM);
 TILING_DATA_FIELD_DEF(int64_t, cubeBlockDimK);
-TILING_DATA_FIELD_DEF(int64_t, kUbSize);             // ub一次处理k的size
 TILING_DATA_FIELD_DEF(int64_t, cvLoopKSize);         // cv同步使用的k轴长度
 TILING_DATA_FIELD_DEF(int64_t, multCoreSplitKSize);  // 多核切K后的单核k处理长度
 TILING_DATA_FIELD_DEF(int64_t, multCoreSplitMSize);  // 多核切K后的单核k处理长度
-TILING_DATA_FIELD_DEF(int64_t, tailKSizeOfFormerBlock);
-TILING_DATA_FIELD_DEF(int64_t, tailKSizeOfTailBlock);
 
-TILING_DATA_FIELD_DEF(int64_t, mLoopOfFormerBlock);
-TILING_DATA_FIELD_DEF(int64_t, mLoopOfTailBlock);
-TILING_DATA_FIELD_DEF(int64_t, formerMSize);
-TILING_DATA_FIELD_DEF(int64_t, tailMSizeOfFormerBlock);
-TILING_DATA_FIELD_DEF(int64_t, tailMSizeOfTailBlock);
-
-TILING_DATA_FIELD_DEF(int64_t, firstUsedCoreNum);
 TILING_DATA_FIELD_DEF(int64_t, secondUsedCoreNum);
-
-TILING_DATA_FIELD_DEF(int64_t, rowInnerFactor);
 
 TILING_DATA_FIELD_DEF(int64_t, cubeCoreNum);
 TILING_DATA_FIELD_DEF(int64_t, stage1MFactor);
 
-TILING_DATA_FIELD_DEF(int64_t, bufferPool0Size);
-TILING_DATA_FIELD_DEF(int64_t, bufferPool1Size);
-TILING_DATA_FIELD_DEF(int64_t, mUbSize);
 TILING_DATA_FIELD_DEF(int64_t, hasPreMix);
 TILING_DATA_FIELD_DEF(int64_t, hasPreOut);
 
@@ -157,9 +133,7 @@ class HcPreVaTiling {
   int64_t iterTimes_ = 0;
   double hcEps_ = 0.0;
   double normEps_ = 0.0;
-  platform_ascendc::SocVersion socVersion_ =
-      platform_ascendc::SocVersion::ASCEND910B;
 };
 
 }  // namespace optiling
-#endif  // HC_PRE_VA_SINKHORN_TILING_H
+#endif  // HC_PRE_VA_TILING_H
