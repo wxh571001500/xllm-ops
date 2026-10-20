@@ -247,22 +247,6 @@ def gamma_add_rms_norm_npu(x1, x2, gamma, eps=1e-6,
         x1, x2, gamma, eps, add_gamma_offset)
 
 
-def hc_pre_va_npu(
-    hidden: torch.Tensor,
-    hc_fn: torch.Tensor,
-    hc_scale: torch.Tensor,
-    hc_base: torch.Tensor,
-    pre_mix: torch.Tensor | None = None,
-    hc_mult: int = 4,
-    hc_sinkhorn_iters: int = 20,
-    norm_eps: float = 1e-6,
-    hc_eps: float = 1e-6,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    return custom_ops_lib.hc_pre_va(
-        hidden, hc_fn, hc_scale, hc_base, pre_mix, hc_mult, hc_sinkhorn_iters, norm_eps, hc_eps
-    )
-
-
 # hc_pre_sinkhorn (per-token: pre/post gating + sinkhorn-normalized comb_frag)
 # mixes last dim = 2*hc_mult + hc_mult^2 ([pre | post | comb]).
 # returns (y[bs,d] bf16, post[bs,hc_mult] fp32, comb_frag[bs,hc_mult,hc_mult] fp32)
