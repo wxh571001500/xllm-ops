@@ -32,15 +32,15 @@ using namespace optiling;
 using AscendC::CrossCoreSetFlag;
 using AscendC::CrossCoreWaitFlag;
 
-// 由于S2循环前，RunInfo还没有赋值，使用Bngs1Param临时存放B、N、S1轴相关的信息；同时减少重复计算
+// Before the S2 loop, RunInfo is not populated. Bngs1Param temporarily holds B, N, and S1 metadata and avoids repeated calculations.
 struct TempLoopInfo {
     uint32_t bn2IdxInCurCore = 0;
     uint32_t bIdx = 0U;
     uint32_t n2Idx = 0U;
-    uint64_t s2BasicSizeTail = 0U; // S2方向循环的尾基本块大小
-    uint32_t s2LoopTimes = 0U; // S2方向循环的总次数，无论TND还是BXXD都是等于实际次数，不用减1
+    uint64_t s2BasicSizeTail = 0U; // Tail basic-block size for the S2 loop.
+    uint32_t s2LoopTimes = 0U; // Total S2 iterations. For both TND and BXXD, this is the actual count without subtracting one.
 
-    int32_t actS1Size = 0; // TND场景下当前Batch循环处理的S1轴的大小
+    int32_t actS1Size = 0; // S1 size processed by the current batch iteration for TND.
     int32_t actOriS2Size = 0;
     int32_t actCmpS2Size = 0;
 
@@ -51,7 +51,7 @@ struct TempLoopInfo {
     uint32_t gS1Idx = 0U;
     uint32_t s1StartIdx = 0;
     uint32_t s1EndIdx = 0;
-    uint64_t mBasicSizeTail = 0U; // gS1方向循环的尾基本块大小
+    uint64_t mBasicSizeTail = 0U; // Tail basic-block size for the GS1 loop.
     uint32_t cmpLoopTimes = 0;
     uint32_t oriLoopTimes = 0;
     uint32_t v0OriSize = 0;
@@ -72,7 +72,7 @@ struct TempLoopInfo {
 template <typename SMLAT>
 class SmlaVaCsa {
 public:
-    // 中间计算数据类型为float，高精度模式
+    // Use float for intermediate calculations in high-precision mode.
     using T = float;
     using Q_T = typename SMLAT::queryType;
     using KV_T = typename SMLAT::kvType;
@@ -242,7 +242,7 @@ __aicore__ inline void SmlaVaCsa<SMLAT>::InitTilingData()
     // cmp
     constInfo.cmpRatio = tilingData->cmpParams.cmpRatio;
     constInfo.sparseBlockCount = tilingData->cmpParams.sparseBlockCount;
-    constInfo.sparseBlockSize = 1; // sparseBlockSize 固定为1
+    constInfo.sparseBlockSize = 1; // sparseBlockSize is fixed at 1.
     constInfo.cmpMaskMode = tilingData->cmpParams.cmpMaskMode;
     constInfo.cmpKvStride0 = tilingData->cmpParams.cmpKvStride0;
     constInfo.cmpSeqSize = tilingData->cmpParams.cmpKvSeqSize;
@@ -298,8 +298,8 @@ __aicore__ inline void SmlaVaCsa<SMLAT>::InitAllZeroOutput(uint32_t bIdx, uint32
 
         uint64_t attenOutOffset = (tBase + s1Idx) * constInfo.kvHeadNum * constInfo.gSize * constInfo.headDim +
                                   n2Idx * constInfo.gSize * constInfo.headDim;
-        uint64_t lseOffset = (tBase + s1Idx) * constInfo.gSize +           // T轴、s1轴偏移
-                             n2Idx * constInfo.qSeqSize * constInfo.gSize; // N2轴偏移
+        uint64_t lseOffset = (tBase + s1Idx) * constInfo.gSize +           // Offset along T and S1.
+                             n2Idx * constInfo.qSeqSize * constInfo.gSize; // Offset along N2.
         matmul::InitOutput<OUT_T>(attentionOutGm[attenOutOffset], constInfo.gSize * constInfo.headDim, 0);
         if (constInfo.returnSoftmaxLse) {
             matmul::InitOutput<T>(softmaxLseGm[lseOffset], constInfo.gSize, 0);
@@ -309,9 +309,9 @@ __aicore__ inline void SmlaVaCsa<SMLAT>::InitAllZeroOutput(uint32_t bIdx, uint32
             bIdx * constInfo.qSeqSize * constInfo.kvHeadNum * constInfo.gSize * constInfo.headDim +
             s1Idx * constInfo.kvHeadNum * constInfo.gSize * constInfo.headDim +
             n2Idx * constInfo.gSize * constInfo.headDim;
-        uint64_t lseOffset = bIdx * constInfo.qSeqSize * constInfo.kvHeadNum * constInfo.gSize + // B轴偏移
-                             n2Idx * constInfo.qSeqSize * constInfo.gSize +                      // N2轴偏移
-                             s1Idx * constInfo.gSize;                                            // S1轴偏移
+        uint64_t lseOffset = bIdx * constInfo.qSeqSize * constInfo.kvHeadNum * constInfo.gSize + // Offset along B.
+                             n2Idx * constInfo.qSeqSize * constInfo.gSize +                      // Offset along N2.
+                             s1Idx * constInfo.gSize;                                            // Offset along S1.
         matmul::InitOutput<OUT_T>(attentionOutGm[attenOutOffset], constInfo.gSize * constInfo.headDim, 0);
         if (constInfo.returnSoftmaxLse) {
             matmul::InitOutput<T>(softmaxLseGm[lseOffset], constInfo.gSize, 0);
@@ -416,16 +416,16 @@ __aicore__ inline int32_t SmlaVaCsa<SMLAT>::GetCmpMaskS2Size(uint32_t bIdx, int3
 template <typename SMLAT>
 __aicore__ inline void SmlaVaCsa<SMLAT>::GetSparseActualSeqLen()
 {
-    // 行无效通过ori部分判断, ori部分如果有行无效那么ori和cmp都有
+    // Determine invalid rows from the original part; rows invalid there are invalid in both original and compressed parts.
     if (static_cast<int32_t>(tempLoopInfo.s1EndIdx) < -(tempLoopInfo.actOriS2Size - tempLoopInfo.actS1Size)) {
         tempLoopInfo.actOriS2Size = 0;
         tempLoopInfo.actCmpS2Size = 0;
         return;
     }
 
-    // 对于cmp部分还有top k, tempLoopInfo.actS2Size只针对cmp。
-    // 因果可见长度是 q_idx+1，连续 indices（0..q_idx,-1）时有效条数等于该长度；
-    // 出现 sparse gap（如 0..70,88,89,90,-1）时有效条数更少，gather 与计算都按真实有效条数走。
+    // The compressed part also applies top-k; tempLoopInfo.actS2Size refers only to that part.
+    // The causal visible length is q_idx+1. For contiguous indices (0..q_idx,-1), the valid entry count equals that length.
+    // Sparse gaps (for example, 0..70,88,89,90,-1) reduce the valid count; both gathering and computation use the actual valid count.
     int32_t thresHold = (tempLoopInfo.cmpMaskRight + tempLoopInfo.s1EndIdx + 1) / constInfo.cmpRatio;
     int32_t bound = Min(tempLoopInfo.actCmpS2Size,
                         Min(constInfo.sparseBlockCount * constInfo.sparseBlockSize, Max(thresHold, 0)));
@@ -545,7 +545,7 @@ __aicore__ inline void SmlaVaCsa<SMLAT>::Init(
         oriTopkLengthGm.SetGlobalBuffer((__gm__ int32_t *)oriTopkLength);
     }
 
-    // workspace 内存排布
+    // Workspace memory layout.
     // |Q--|mm1ResGm|vec1ResGm|mm2ResGm|vec2ResGm
     // |Core0_Q1-Core0_Q2-Core1_Q1-Core1_Q2....Core32_Q1-Core32_Q2|Core0_mmRes
     uint64_t offset = 0;
@@ -585,7 +585,7 @@ __aicore__ inline void SmlaVaCsa<SMLAT>::Init(
         cubeBlock.InitMm2GlobalTensor(vec1ResGm, mm2ResGm, attentionOutGm);
         cubeBlock.InitPageAttentionInfo(oriKvGm, kvMergeGm_, oriBlockTableGm, cmpBlockTableGm);
     }
-    // 要在InitParams之后执行
+    // Execute after InitParams.
     if (pipe != nullptr) {
         InitBuffers();
     }
@@ -623,7 +623,7 @@ __aicore__ inline void SmlaVaCsa<SMLAT>::CalcParams(uint32_t loop, uint32_t cmpL
     info.isBmm2Output = false;
     info.actS1Size = tempLoopInfo.actS1Size;
 
-    // M方向的尾块
+    // Tail block along M.
     info.actMBaseSize = tempLoopInfo.mBasicSizeTail;
 
     if ASCEND_IS_AIV {
@@ -651,7 +651,7 @@ __aicore__ inline void SmlaVaCsa<SMLAT>::CalcParams(uint32_t loop, uint32_t cmpL
         uint64_t s1HeadOffset = (info.gS1Idx / constInfo.gSize) * constInfo.qHeadNum;
         uint64_t qHeadOffset = info.n2Idx * constInfo.gSize + info.gS1Idx % constInfo.gSize;
         tensorACoreOffset = tndBIdxOffsetForQ + (s1HeadOffset + qHeadOffset) * constInfo.headDim;
-        tensorBCoreOffset = tndBIdxOffsetForKV + info.n2Idx * constInfo.headDim; // 当前为PA场景，该变量失效
+        tensorBCoreOffset = tndBIdxOffsetForKV + info.n2Idx * constInfo.headDim; // This variable is unused in the current PA case.
         tensorCmpBCoreOffset = tndBIdxOffsetForCmpKV + info.n2Idx * constInfo.headDim;
         if constexpr (LAYOUT_T == SMLA_LAYOUT::BSND) { // B,S1,N2 K
             topKBaseOffset = (info.bIdx * constInfo.qSeqSize + tempLoopInfo.s1StartIdx) * constInfo.kvHeadNum *
@@ -670,7 +670,7 @@ __aicore__ inline void SmlaVaCsa<SMLAT>::CalcParams(uint32_t loop, uint32_t cmpL
     info.topKBaseOffset = topKBaseOffset;
 
     if (s2LoopIdx < tempLoopInfo.oriLoopTimes) {
-        // S2首次循环只能在ori_kv
+        // The first S2 iteration must use ori_kv.
         info.isOriOnly = true;
         info.relativeS2Idx = 0;
         uint64_t s2Offset = info.s2Idx * constInfo.s2BaseSize;
@@ -799,7 +799,7 @@ __aicore__ inline void SmlaVaCsa<SMLAT>::ProcessBalance()
         CrossCoreSetFlag<ConstInfo::SMLA_SYNC_MODE2, PIPE_MTE2>(3);
     }
 
-    // 适配左闭右开
+    // Use an inclusive start and exclusive end.
     if (constInfo.bN2Start == constInfo.bN2End) {
         if (constInfo.gS1Start != constInfo.gS1End || constInfo.s2Start != constInfo.s2End) {
             constInfo.bN2End += 1;
@@ -810,25 +810,25 @@ __aicore__ inline void SmlaVaCsa<SMLAT>::ProcessBalance()
 
     for (uint32_t bN2LoopIdx = constInfo.bN2Start; bN2LoopIdx < constInfo.bN2End; bN2LoopIdx++) {
         GetBN2Idx(bN2LoopIdx, tempLoopInfo.bIdx, tempLoopInfo.n2Idx);
-        tempLoopInfo.actS1Size = GetActualSeqLenQ(tempLoopInfo.bIdx); // 获取actualSeqLength
+        tempLoopInfo.actS1Size = GetActualSeqLenQ(tempLoopInfo.bIdx); // Get actualSeqLength.
         bool isS1ZeroAndLastBatch = (tempLoopInfo.actS1Size == 0) && ((constInfo.outputLayout == SMLA_LAYOUT::BSND) ||
                                                                       (bN2LoopIdx + 1 == constInfo.bN2End));
         uint32_t gS1SplitNum = CeilDiv(tempLoopInfo.actS1Size * constInfo.gSize, constInfo.mBaseSize);
 
-        // 当处于最后一个BN2时, 且gS1End为0时, 说明当前BN2里的所有数据都在当前核处理
+        // At the final BN2, gS1End=0 means this core processes all data in the current BN2.
         gS1LoopEnd = (bN2LoopIdx + 1 == constInfo.bN2End && constInfo.gS1End != 0) ? constInfo.gS1End : gS1SplitNum;
-        // 当处于最后一个BN2且当前S1为0时，需要进入循环计算preload导致的未完成的部分
+        // At the final BN2 with S1=0, enter the loop to finish work left pending by preloading.
         gS1LoopEnd = isS1ZeroAndLastBatch ? gS1LoopEnd + 1 : gS1LoopEnd;
         for (uint32_t gS1LoopIdx = constInfo.gS1Start; gS1LoopIdx < gS1LoopEnd; gS1LoopIdx++) {
             tempLoopInfo.actOriS2Size = GetActualSeqLenKV(tempLoopInfo.bIdx);
             tempLoopInfo.actCmpS2Size = GetActualSeqLenCmpKV(tempLoopInfo.bIdx, tempLoopInfo.actOriS2Size);
-            // 计算需要的数据, 避免重复计算
+            // Calculate the required data once to avoid repeated work.
             tempLoopInfo.gS1Idx = gS1LoopIdx * constInfo.mBaseSize;
             tempLoopInfo.s1StartIdx = tempLoopInfo.gS1Idx / constInfo.gSize;
             tempLoopInfo.s1EndIdx =
                 Min((tempLoopInfo.s1StartIdx + constInfo.mBaseSize / constInfo.gSize - 1), tempLoopInfo.actS1Size - 1);
 
-            // 此处均为闭区间
+            // All bounds here are inclusive.
             tempLoopInfo.oriMaskRight = tempLoopInfo.actOriS2Size - tempLoopInfo.actS1Size +
                                         static_cast<int32_t>(tempLoopInfo.s1EndIdx) + constInfo.oriWinRight;
             tempLoopInfo.oriMaskLeft = Max(tempLoopInfo.actOriS2Size - tempLoopInfo.actS1Size +
@@ -888,8 +888,8 @@ __aicore__ inline void SmlaVaCsa<SMLAT>::ProcessBalance()
 
             uint32_t s2LoopEnd = (isEnd && constInfo.s2End != 0) ? constInfo.s2End : tempLoopInfo.s2LoopTimes;
             tempLoopInfo.s2LoopTimes = s2LoopEnd;
-            // 分核修改后需要打开
-            // 当前s2是否被切，决定了输出是否要写到attenOut上
+            // Enable after updating core partitioning.
+            // Whether S2 is split determines whether to write the output to attenOut.
             tempLoopInfo.tndIsS2SplitCore = ((constInfo.s2Start == 0) && (s2LoopEnd == s2SplitNum)) ? false : true;
             tempLoopInfo.tndCoreStartKVSplitPos = globalLoopStart ? constInfo.coreStartKVSplitPos : 0;
             uint32_t extraLoop = isEnd ? 2 : 0;
@@ -897,7 +897,7 @@ __aicore__ inline void SmlaVaCsa<SMLAT>::ProcessBalance()
             for (uint32_t s2LoopIdx = constInfo.s2Start; s2LoopIdx < (s2LoopEnd + extraLoop); s2LoopIdx++) {
                 PreloadPipeline(gloop, cmpLoop, constInfo.s2Start, s2LoopIdx, extraInfo);
                 ++gloop;
-                if (s2LoopIdx >= tempLoopInfo.oriLoopTimes && s2LoopIdx < s2LoopEnd) { // 用于判断v0使用的循环GM的id
+                if (s2LoopIdx >= tempLoopInfo.oriLoopTimes && s2LoopIdx < s2LoopEnd) { // Select the rotating GM buffer ID used by V0.
                     ++cmpLoop;
                 }
             }
@@ -919,9 +919,9 @@ __aicore__ inline void SmlaVaCsa<SMLAT>::PreloadPipeline(uint32_t loop, uint32_t
                                                                  uint64_t s2LoopIdx,
                                                                  RunInfo extraInfo[SMLA_PRELOAD_TASK_CACHE_SIZE])
 {
-    RunInfo &extraInfo0 = extraInfo[loop % SMLA_PRELOAD_TASK_CACHE_SIZE];       // 本轮任务
-    RunInfo &extraInfo2 = extraInfo[(loop + 2) % SMLA_PRELOAD_TASK_CACHE_SIZE]; // 上一轮任务
-    RunInfo &extraInfo1 = extraInfo[(loop + 1) % SMLA_PRELOAD_TASK_CACHE_SIZE]; // 上两轮任务
+    RunInfo &extraInfo0 = extraInfo[loop % SMLA_PRELOAD_TASK_CACHE_SIZE];       // Task for the current iteration.
+    RunInfo &extraInfo2 = extraInfo[(loop + 2) % SMLA_PRELOAD_TASK_CACHE_SIZE]; // Task for the previous iteration.
+    RunInfo &extraInfo1 = extraInfo[(loop + 1) % SMLA_PRELOAD_TASK_CACHE_SIZE]; // Task from two iterations ago.
 
     CalcParams(loop, cmpLoop, s2Start, s2LoopIdx, extraInfo0);
     if constexpr (!HEAD_RATIO_ONE) {

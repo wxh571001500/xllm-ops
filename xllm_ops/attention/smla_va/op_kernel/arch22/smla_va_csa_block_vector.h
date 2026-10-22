@@ -29,7 +29,7 @@ using AscendC::CrossCoreWaitFlag;
 template <typename SMLAT>
 class SMLAVectorBlock {
 public:
-    // 中间计算数据类型为float，高精度模式
+    // Use float for intermediate calculations in high-precision mode.
     using T = float;
     using KV_T = typename SMLAT::kvType;
     using OUT_T = typename SMLAT::outputType;
@@ -106,13 +106,13 @@ public:
                                              uint32_t dealRowCount, uint32_t columnCount, uint32_t actualColumnCount);
     __aicore__ inline uint64_t CalcAccumOffset(uint32_t bN2Idx, uint32_t gS1Idx);
 
-    // BLOCK和REPEAT的字节数
+    // BLOCK and REPEAT sizes in bytes.
     static constexpr uint64_t BYTE_BLOCK = 32UL;
     static constexpr uint32_t REPEAT_BLOCK_BYTE = 256U;
-    // BLOCK和REPEAT的FP32元素数
+    // Number of FP32 elements in a BLOCK and REPEAT.
     static constexpr uint32_t FP32_BLOCK_ELEMENT_NUM = BYTE_BLOCK / sizeof(float);
     static constexpr uint32_t FP32_REPEAT_ELEMENT_NUM = REPEAT_BLOCK_BYTE / sizeof(float);
-    // repeat stride不能超过256
+    // The repeat stride must not exceed 256.
     static constexpr uint32_t REPEATE_STRIDE_UP_BOUND = 256;
 
 private:
@@ -169,7 +169,7 @@ private:
     GlobalTensor<int32_t> oriBlockTableGm_;
     GlobalTensor<int32_t> cmpBlockTableGm_;
 
-    // ================================Local Buffer区====================================
+    // ================================Local buffers====================================
     TBuf<> inputBuff1;  // 32K
     TBuf<> inputBuff2;  // 16K
     TBuf<> outputBuff1; // 32K
@@ -224,7 +224,7 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::InitBuffers(TPipe *pipe)
     pipe->InitBuffer(softmaxSumDefaultBuff, ConstInfo::BUFFER_SIZE_BYTE_1K);
 
     pipe->InitBuffer(sinksBuff, MAX_N1_SIZE * sizeof(SINKS_T));
-    // 分配256+N1大小内存，其中256是m轴VEC最大切块
+    // Allocate 256+N1 elements; 256 is the maximum VEC tile size along M.
     pipe->InitBuffer(sinksBrcbBuff, MAX_N1_SIZE * sizeof(SINKS_T) * BLOCK_ELEMENT_NUM * 3U);
 
     softmaxMaxUb = softmaxMaxBuff.Get<T>();
@@ -325,12 +325,12 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::CopySinksIn()
     DataCopyPad(sinksUb, sinksGm, dataCopyParams, padParams);
     SetFlag<AscendC::HardEvent::MTE2_V>(SYNC_SINKS_BUF_FLAG);
     WaitFlag<AscendC::HardEvent::MTE2_V>(SYNC_SINKS_BUF_FLAG);
-    uint32_t repeatTimes = (constInfo.qHeadNum + BLOCK_ELEMENT_NUM - 1U) / BLOCK_ELEMENT_NUM; // 每次处理 8 datablocks
+    uint32_t repeatTimes = (constInfo.qHeadNum + BLOCK_ELEMENT_NUM - 1U) / BLOCK_ELEMENT_NUM; // Process eight data blocks at a time.
     Brcb(sinksBrcbUb, sinksUb, repeatTimes, {1, BLOCK_ELEMENT_NUM});
     PipeBarrier<PIPE_V>();
 
     DataCopyParams repeatParams;
-    repeatParams.blockCount = 1; // 搬到有一个块超过单个vec核减分核M轴大小即可，核间切分每个vec256
+    repeatParams.blockCount = 1; // Copy enough blocks to exceed the M-axis tile size of a single vector core; each vector core gets 256 rows.
     repeatParams.blockLen = constInfo.qHeadNum;
     repeatParams.srcStride = 0U;
     repeatParams.dstStride = 0U;
@@ -343,7 +343,7 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::CopySinksIn()
 template <typename SMLAT>
 __aicore__ inline void SMLAVectorBlock<SMLAT>::SliceAndContactSinksValue(uint32_t nIdx, uint32_t dealRowCount)
 {
-    // WholeReduceMax接口中repeatTimes支持范围（0,255），因此需要分多次调用WholeReduceMax，每次repeatTime=128
+    // WholeReduceMax supports repeatTimes in (0, 255), so split the work into calls with repeatTime=128.
     uint32_t repeatTimesOnce = 128;
     uint32_t loopTimes = (dealRowCount + repeatTimesOnce - 1) / repeatTimesOnce;
     uint32_t repeatTimes = repeatTimesOnce;
@@ -383,12 +383,12 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::ProcessLse(const RunInfo &info, c
     uint64_t lseOffset;
     if (constInfo.outputLayout == SMLA_LAYOUT::TND) {
         uint32_t tBase = actualSeqLengthsQGm.GetValue(info.bIdx);
-        lseOffset = (tBase + info.s1Idx) * constInfo.gSize +               // T轴、s1轴偏移
-                    info.n2IdxReal * constInfo.qSeqSize * constInfo.gSize; // N2轴偏移
+        lseOffset = (tBase + info.s1Idx) * constInfo.gSize +               // Offset along T and S1.
+                    info.n2IdxReal * constInfo.qSeqSize * constInfo.gSize; // Offset along N2.
     } else if (constInfo.outputLayout == SMLA_LAYOUT::BSND) {
-        lseOffset = info.bIdx * constInfo.qSeqSize * constInfo.kvHeadNum * constInfo.gSize + // B轴偏移
-                    info.n2IdxReal * constInfo.qSeqSize * constInfo.gSize +                  // N2轴偏移
-                    info.s1Idx * constInfo.gSize;                                            // S1轴偏移
+        lseOffset = info.bIdx * constInfo.qSeqSize * constInfo.kvHeadNum * constInfo.gSize + // Offset along B.
+                    info.n2IdxReal * constInfo.qSeqSize * constInfo.gSize +                  // Offset along N2.
+                    info.s1Idx * constInfo.gSize;                                            // Offset along S1.
     }
     lseOffset = lseOffset + mSplitInfo.nBufferStartM + mSplitInfo.vecStartM;
     uint32_t baseOffset = mSplitInfo.nBufferStartM / 2;
@@ -481,7 +481,7 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::DealBmm1ResBaseBlock(const RunInf
 
     Cast(tmpMMResCastTensor, mmResUb, AscendC::RoundMode::CAST_ROUND, computeSize);
     SetFlag<AscendC::HardEvent::V_MTE2>(SYNC_INPUT_BUF1_FLAG + pingpongFlag);
-    pingpongFlag ^= 1; // pingpong 0 1 切换
+    pingpongFlag ^= 1; // Toggle ping-pong buffer 0/1.
 
     SetFlag<AscendC::HardEvent::V_MTE3>(SYNC_OUTPUT_BUF1_FLAG);
     WaitFlag<AscendC::HardEvent::V_MTE3>(SYNC_OUTPUT_BUF1_FLAG);
@@ -498,8 +498,8 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::ProcessVec1SingleBuf(const RunInf
     uint32_t mSplitSize = info.actualSingleProcessSInnerSize == 0 ?
                               16 :
                               BASE_BLOCK_MAX_ELEMENT_NUM / info.actualSingleProcessSInnerSizeAlign;
-    // 1. 向下8对齐是因为UB操作至少32B
-    // 2. info.actualSingleProcessSInnerSizeAlign最大512, mSplitSize可以确保最小为16
+    // 1. Align down to eight elements because UB operations require at least 32 bytes.
+    // 2. info.actualSingleProcessSInnerSizeAlign is at most 512; mSplitSize ensures a minimum of 16.
     mSplitSize = mSplitSize / 8 * 8;
 
     if (mSplitSize > mSplitInfo.vecDealM) {
@@ -608,8 +608,8 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::CopyInKv(int64_t &mte2Size, int64
                    sizeof(KV_T);
     if (unlikely(keySrcStride >= INT32_MAX || keySrcStride < 0 || realS2Idx1 + constInfo.sparseBlockSize >= s2IdLimit ||
                  realS2Idx2 + constInfo.sparseBlockSize >= s2IdLimit)) {
-        // stride溢出、stride为负数、s2超长等异常场景，还原成2条搬运指令
-        // 因为需要拷贝两块
+        // For stride overflow, negative strides, or excessive S2 lengths, fall back to two copy instructions
+        // because two blocks must be copied.
         CopyInSingleKv(mte2Size, mte3Size, mergeMte3Idx, realS2Idx1, keyOffset1, s2IdLimit, runInfo);
         CopyInSingleKv(mte2Size, mte3Size, mergeMte3Idx, realS2Idx2, keyOffset2, s2IdLimit, runInfo);
     } else {
@@ -671,7 +671,7 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::ProcessVec0L(const RunInfo &runIn
     if (s2GmLimit > s2ProcessSize) {
         s2GmLimit = s2ProcessSize;
     }
-    // 处理两个基本块
+    // Process two basic blocks.
     for (int64_t s2GmOffsetArray = s2GmStartOffset; s2GmOffsetArray < s2GmLimit;
          s2GmOffsetArray += 2 * constInfo.sparseBlockSize) {
         if (needWaitMte3ToMte2) {
@@ -810,8 +810,8 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::Bmm2FDDataCopyOut(const RunInfo &
     uint64_t accumTmpOutNum = CalcAccumOffset(info.bIdx, info.gS1Idx);
     uint64_t offset =
         accumTmpOutNum * constInfo.kvHeadNum * constInfo.mBaseSize * constInfo.headDim +              // taskoffset
-        info.tndCoreStartKVSplitPos * constInfo.kvHeadNum * constInfo.mBaseSize * constInfo.headDim + // 份数offset
-        wsMStart * actualColumnCount;                                                                 // m轴offset
+        info.tndCoreStartKVSplitPos * constInfo.kvHeadNum * constInfo.mBaseSize * constInfo.headDim + // Offset for the split.
+        wsMStart * actualColumnCount;                                                                 // Offset along M.
     GlobalTensor<T> dst = accumOutGm[offset];
     if (info.actualSingleProcessSInnerSize == 0) {
         DataCopyExtParams dataCopyParams;
@@ -847,7 +847,7 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::Bmm2CastAndCopyOut(const RunInfo 
 {
     LocalTensor<OUT_T> tmpBmm2ResCastTensor = outputBuff1.Get<OUT_T>();
     WaitFlag<AscendC::HardEvent::MTE3_V>(SYNC_OUTPUT_BUF1_FLAG);
-    if constexpr (IsSameType<OUT_T, bfloat16_t>::value) { // bf16 采取四舍六入五成双模式
+    if constexpr (IsSameType<OUT_T, bfloat16_t>::value) { // Use round-to-nearest-even for BF16.
         Cast(tmpBmm2ResCastTensor, bmm2ResUb, AscendC::RoundMode::CAST_RINT, dealRowCount * columnCount);
     } else {
         Cast(tmpBmm2ResCastTensor, bmm2ResUb, AscendC::RoundMode::CAST_ROUND, dealRowCount * columnCount);
@@ -895,7 +895,7 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::DealBmm2ResBaseBlock(const RunInf
     bmm2ResUb.SetSize(vec2ComputeSize);
     DataCopy(bmm2ResUb, tmpBmm2ResUb, vec2ComputeSize);
     SetFlag<AscendC::HardEvent::V_MTE2>(SYNC_INPUT_BUF1_FLAG + pingpongFlag);
-    pingpongFlag ^= 1; // pingpong 0 1切换
+    pingpongFlag ^= 1; // Toggle ping-pong buffer 0/1.
 
     uint32_t inOutBaseOffset = mStart * columnCount;
     uint32_t baseOffset = mSplitInfo.nBufferStartM / 2 + startRow;
@@ -952,7 +952,7 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::DealBmm2ResBaseBlock(const RunInf
             SetFlag<AscendC::HardEvent::MTE3_V>(SYNC_OUTPUT_BUF1_FLAG);
         }
     } else {
-        // 除第一个循环外，均需要更新中间计算结果
+        // Update intermediate results on every iteration except the first.
         if (!info.isFirstSInnerLoop) {
             event_t eventIdMte2WaitMte3 = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE3_MTE2));
             SetFlag<HardEvent::MTE3_MTE2>(eventIdMte2WaitMte3);
@@ -970,7 +970,7 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::DealBmm2ResBaseBlock(const RunInf
             WaitFlag<AscendC::HardEvent::MTE2_V>(SYNC_INPUT_BUF1_FLAG);
 
             uint32_t idx = info.loop % (constInfo.preLoadNum);
-            LocalTensor<T> expUb = v0ValidSizeBuff.Get<T>()[384]; // sumUb用临时内存 16 * 32B  = 512B
+            LocalTensor<T> expUb = v0ValidSizeBuff.Get<T>()[384]; // sumUb uses temporary memory: 16 * 32 bytes = 512 bytes.
             Brcb(expUb, softmaxExpUb[idx * SOFTMAX_TMP_BUFFER_OFFSET / sizeof(T) + baseOffset], (dealRowCount + 7) / 8,
                  {1, 8});
             PipeBarrier<PIPE_V>();
@@ -981,13 +981,13 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::DealBmm2ResBaseBlock(const RunInf
             AscendC::PipeBarrier<PIPE_V>();
 
             SetFlag<AscendC::HardEvent::V_MTE2>(SYNC_INPUT_BUF1_FLAG + pingpongFlag);
-            pingpongFlag ^= 1; // pingpong 0 1 切换
+            pingpongFlag ^= 1; // Toggle ping-pong buffer 0/1.
         }
 
-        // 最后一次输出计算结果，否则将中间结果暂存至workspace
+        // Output the result on the final iteration; otherwise store intermediate results in workspace.
         if (info.isLastS2Loop) {
             uint32_t idx = info.loop % (constInfo.preLoadNum);
-            LocalTensor<T> tmpSumUb = v0ValidSizeBuff.Get<T>()[384]; // sumUb用临时内存 16 * 32B  = 512B
+            LocalTensor<T> tmpSumUb = v0ValidSizeBuff.Get<T>()[384]; // sumUb uses temporary memory: 16 * 32 bytes = 512 bytes.
             Brcb(tmpSumUb, softmaxSumUb[idx * SOFTMAX_TMP_BUFFER_OFFSET / sizeof(T) + baseOffset],
                  (dealRowCount + 7) / 8, {1, 8});
             PipeBarrier<PIPE_V>();
@@ -1014,7 +1014,7 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::RowDivs(LocalTensor<float> dstUb,
                                                        LocalTensor<float> src1Ub, uint32_t dealRowCount,
                                                        uint32_t columnCount, uint32_t actualColumnCount)
 {
-    // divs by row, 每行的元素除以相同的元素
+    // Divide each row by a shared scalar.
     // dstUb[i, (j * 8) : (j * 8 + 7)] = src0Ub[i, (j * 8) : (j * 8 + 7)] / src1Ub[i, 0 : 7]
     // src0Ub:[dealRowCount, columnCount], src1Ub:[dealRowCount, FP32_BLOCK_ELEMENT_NUM] dstUb:[dealRowCount,
     // columnCount]
@@ -1041,9 +1041,9 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::RowDivs(LocalTensor<float> dstUb,
         columnRepeatParams.src0BlkStride = 1;
         columnRepeatParams.src1BlkStride = 0;
         columnRepeatParams.dstBlkStride = 1;
-        columnRepeatParams.src0RepStride = 8; // 列方向上两次repeat起始地址间隔dtypeMask=64个元素，即8个block
+        columnRepeatParams.src0RepStride = 8; // Consecutive column repeats start dtypeMask=64 elements, or eight blocks, apart.
         columnRepeatParams.src1RepStride = 0;
-        columnRepeatParams.dstRepStride = 8; // 列方向上两次repeat起始地址间隔dtypeMask=64个元素，即8个block
+        columnRepeatParams.dstRepStride = 8; // Consecutive column repeats start dtypeMask=64 elements, or eight blocks, apart.
         uint32_t offset = 0;
         for (uint32_t i = 0; i < dealRowCount; i++) {
             Div(dstUb[offset], src0Ub[offset], src1Ub[i * FP32_BLOCK_ELEMENT_NUM], dtypeMask, columnRepeatCount,
@@ -1061,7 +1061,7 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::RowMuls(LocalTensor<T> dstUb, Loc
                                                        LocalTensor<T> src1Ub, uint32_t dealRowCount,
                                                        uint32_t columnCount, uint32_t actualColumnCount)
 {
-    // muls by row, 每行的元素乘以相同的元素
+    // Multiply each row by a shared scalar.
     // dstUb[i, (j * 8) : (j * 8 + 7)] = src0Ub[i, (j * 8) : (j * 8 + 7)] * src1Ub[i, 0 : 7]
     // src0Ub:[dealRowCount, columnCount] src1Ub:[dealRowCount, FP32_BLOCK_ELEMENT_NUM] dstUb:[dealRowCount,
     // columnCount]
@@ -1070,16 +1070,16 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::RowMuls(LocalTensor<T> dstUb, Loc
     uint32_t blockElementNum = FP32_BLOCK_ELEMENT_NUM;
 
     if constexpr (std::is_same<T, half>::value) {
-        // 此限制由于每个repeat至多连续读取256B数据
+        // Each repeat can read at most 256 contiguous bytes.
         repeatElementNum = FP32_REPEAT_ELEMENT_NUM * 2; // 256/4 * 2=128
         blockElementNum = FP32_BLOCK_ELEMENT_NUM * 2;   // 32/4 * 2 = 16
     }
 
-    // 每次只能连续读取256B的数据进行计算，故每次只能处理256B/sizeof(dType)=
-    // 列方向分dLoop次，每次处理8列数据
+    // Each operation reads at most 256 contiguous bytes, processing 256/sizeof(dType) elements.
+    // Use dLoop iterations along columns, processing eight columns per iteration.
     uint32_t dLoop = actualColumnCount / repeatElementNum;
     uint32_t dRemain = actualColumnCount % repeatElementNum;
-    // REPEATE_STRIDE_UP_BOUND=256， 此限制由于src0RepStride数据类型为uint8之多256个datablock间距
+    // REPEATE_STRIDE_UP_BOUND=256 because the uint8 src0RepStride limits the spacing to at most 256 data blocks.
     if (columnCount < REPEATE_STRIDE_UP_BOUND * blockElementNum) {
         BinaryRepeatParams repeatParams;
         repeatParams.src0BlkStride = 1;
@@ -1089,7 +1089,7 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::RowMuls(LocalTensor<T> dstUb, Loc
         repeatParams.src1RepStride = 1;
         repeatParams.dstRepStride = columnCount / blockElementNum;
 
-        // 如果以列为repeat所处理的次数小于行处理次数，则以列方式处理。反之则以行进行repeat处理
+        // Repeat along columns when that requires fewer iterations than repeating along rows; otherwise repeat along rows.
         if (dLoop <= dealRowCount) {
             uint32_t offset = 0;
             for (uint32_t i = 0; i < dLoop; i++) {
@@ -1101,34 +1101,34 @@ __aicore__ inline void SMLAVectorBlock<SMLAT>::RowMuls(LocalTensor<T> dstUb, Loc
             columnRepeatParams.src0BlkStride = 1;
             columnRepeatParams.src1BlkStride = 0;
             columnRepeatParams.dstBlkStride = 1;
-            columnRepeatParams.src0RepStride = 8; // 列方向上两次repeat起始地址间隔dtypeMask=64个元素，即8个block
+            columnRepeatParams.src0RepStride = 8; // Consecutive column repeats start dtypeMask=64 elements, or eight blocks, apart.
             columnRepeatParams.src1RepStride = 0;
-            columnRepeatParams.dstRepStride = 8; // 列方向上两次repeat起始地址间隔dtypeMask=64个元素，即8个block
+            columnRepeatParams.dstRepStride = 8; // Consecutive column repeats start dtypeMask=64 elements, or eight blocks, apart.
             for (uint32_t i = 0; i < dealRowCount; i++) {
                 Mul(dstUb[i * columnCount], src0Ub[i * columnCount], src1Ub[i * blockElementNum], repeatElementNum,
                     dLoop, columnRepeatParams);
             }
         }
 
-        // 最后一次完成[dealRowCount, dRemain] * [dealRowCount, blockElementNum] 只计算有效部分
+        // For the final [dealRowCount, dRemain] * [dealRowCount, blockElementNum] operation, compute only valid elements.
         if (dRemain > 0) {
             Mul(dstUb[dLoop * repeatElementNum], src0Ub[dLoop * repeatElementNum], src1Ub, dRemain, dealRowCount,
                 repeatParams);
         }
     } else {
         BinaryRepeatParams repeatParams;
-        repeatParams.src0RepStride = 8; // 每个repeat为256B数据，正好8个datablock
+        repeatParams.src0RepStride = 8; // Each repeat processes 256 bytes, exactly eight data blocks.
         repeatParams.src0BlkStride = 1;
         repeatParams.src1RepStride = 0;
         repeatParams.src1BlkStride = 0;
         repeatParams.dstRepStride = 8;
         repeatParams.dstBlkStride = 1;
-        // 每次计算一行，共计算dealRowCount行
+        // Process one row at a time, for dealRowCount rows.
         for (uint32_t i = 0; i < dealRowCount; i++) {
-            // 计算一行中的dLoop个repeat, 每个repeat计算256/block_size 个data_block
+            // Process dLoop repeats per row; each repeat handles 256/block_size data blocks.
             Mul(dstUb[i * columnCount], src0Ub[i * columnCount], src1Ub[i * blockElementNum], repeatElementNum, dLoop,
                 repeatParams);
-            //  计算一行中的尾块
+            // Process the tail block of a row.
             if (dRemain > 0) {
                 Mul(dstUb[i * columnCount + dLoop * repeatElementNum],
                     src0Ub[i * columnCount + dLoop * repeatElementNum], src1Ub[i * blockElementNum], dRemain, 1,

@@ -12,10 +12,11 @@
 
 #include <iostream>
 
-// 说明: 这些错误日志宏不依赖 OP_LOGE。opdev/op_log.h (经 opdev/format_utils.h 传递包含)
-// 会把 OP_LOGE 重定义为 errno 语义 (std::to_string(errno)), 与 opname 语义冲突;
-// 故此处直接用 std::cerr 输出, 自包含、不受宏遮蔽影响, 且能正确处理 std::string / const char* /
-// 数值等各类实参 (operator<< 重载)。
+// These error logging macros do not depend on OP_LOGE. opdev/op_log.h (transitively
+// included by opdev/format_utils.h) redefines OP_LOGE with errno semantics
+// (std::to_string(errno)), which conflicts with its opname semantics. Use std::cerr
+// directly here to keep logging self-contained and unaffected by macro overrides;
+// operator<< handles std::string, const char*, numeric, and other argument types.
 
 #ifndef OP_LOGE_FOR_INVALID_ARGUMENT_WITH_REASON
 #define OP_LOGE_FOR_INVALID_ARGUMENT_WITH_REASON(opname, param, reason) \

@@ -121,10 +121,10 @@ public:
             .FormatList({ge::FORMAT_ND});
         this->Attr("softmax_scale").AttrType(OPTIONAL).Float(1.0);
         this->Attr("cmp_ratio").AttrType(OPTIONAL).Int(0);
-        this->Attr("ori_mask_mode").AttrType(OPTIONAL).Int(0); // ori_mask_mode默认值0
-        this->Attr("cmp_mask_mode").AttrType(OPTIONAL).Int(0); // cmp_mask_mode默认值0
-        this->Attr("ori_win_left").AttrType(OPTIONAL).Int(-1); // ori_win_left默认值-1
-        this->Attr("ori_win_right").AttrType(OPTIONAL).Int(-1); // ori_win_right默认值-1
+        this->Attr("ori_mask_mode").AttrType(OPTIONAL).Int(0); // Default value: 0.
+        this->Attr("cmp_mask_mode").AttrType(OPTIONAL).Int(0); // Default value: 0.
+        this->Attr("ori_win_left").AttrType(OPTIONAL).Int(-1); // Default value: -1.
+        this->Attr("ori_win_right").AttrType(OPTIONAL).Int(-1); // Default value: -1.
         this->Attr("layout_q").AttrType(OPTIONAL).String("BSND");
         this->Attr("layout_kv").AttrType(OPTIONAL).String("BSND");
         this->Attr("topk_value_mode").AttrType(OPTIONAL).Int(1);

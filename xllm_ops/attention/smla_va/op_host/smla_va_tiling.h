@@ -26,7 +26,7 @@ the full text of the License.  */
 #include "tiling/tiling_api.h"
 
 namespace optiling {
-// ------------------公共定义--------------------------
+// ------------------Common definitions--------------------------
 struct SMLATilingRequiredParaInfo {
   const gert::CompileTimeTensorDesc* desc;
   const gert::StorageShape* shape;
@@ -45,7 +45,7 @@ enum class SMLAAxis : uint32_t {
   S = 1,
   N = 2,
   D = 3,
-  K = 3,  // sparse_indices的K和key的D枚举值相同，表达相同位置, 最后一维
+  K = 3,  // K in sparse_indices and D in key refer to the same final dimension.
   T = 5,
   Bn = 6,  // block number
   Bs = 7   // block size
@@ -59,7 +59,7 @@ enum class SMLATemplateMode : uint32_t {
   ORI_CMP_SPARSE_TEMPLATE_MODE = 4
 };
 
-// ------------------算子原型索引常量定义----------------
+// ------------------Operator prototype index constants----------------
 // Inputs Index (0-10, common)
 constexpr uint32_t Q_INDEX = 0;
 constexpr uint32_t ORI_KV_INDEX = 1;
@@ -110,10 +110,10 @@ constexpr uint32_t DIM_NUM_TWO = 2;
 constexpr uint32_t DIM_NUM_THREE = 3;
 constexpr uint32_t DIM_NUM_FOUR = 4;
 
-// 常量
+// Constants.
 constexpr uint32_t BYTE_BLOCK = 32;
 
-// 入参限制常量
+// Input argument limits.
 constexpr uint32_t METADATA_LIMIT = 1024;
 constexpr uint32_t DIM_LIMIT = 512;
 constexpr uint32_t BLOCK_SIZE_LIMIT = 1024;
@@ -130,7 +130,7 @@ TILING_DATA_FIELD_DEF(uint32_t, oriMaxBlockNumPerBatch)
 TILING_DATA_FIELD_DEF(uint32_t, nNumOfQInOneGroup)
 TILING_DATA_FIELD_DEF(uint32_t, actualLenDimsQ)
 TILING_DATA_FIELD_DEF(uint32_t, actualLenDimsKV)
-TILING_DATA_FIELD_DEF(float, softmaxScale)  // 即 scaleValue
+TILING_DATA_FIELD_DEF(float, softmaxScale)  // Equivalent to scaleValue.
 TILING_DATA_FIELD_DEF(uint32_t, outputLayout)
 TILING_DATA_FIELD_DEF(uint64_t, oriMaskMode)
 TILING_DATA_FIELD_DEF(int64_t, oriKvStride0)  // A2/A3
@@ -215,7 +215,7 @@ struct SMLAParaInfo {
 static std::string SMLADataTypeToSerialString(ge::DataType type);
 std::string SMLALayoutToSerialString(SMLALayout layout);
 
-// -----------算子Tiling入参信息类---------------
+// -----------Operator tiling input information---------------
 class SMLATilingInfo {
  public:
   const char* opName = nullptr;
@@ -234,7 +234,7 @@ class SMLATilingInfo {
   uint32_t qHeadDim = 0;
   uint32_t oriKvHeadDim = 0;
   uint32_t cmpKvHeadDim = 0;
-  uint32_t qTSize = 0;  // 仅TND时生效
+  uint32_t qTSize = 0;  // Used only with TND layout.
 
   uint32_t actualLenDimsQ = 0;
   uint32_t actualLenDimsKV = 0;
@@ -290,7 +290,7 @@ class SMLATilingInfo {
   SMLATemplateMode perfMode = SMLATemplateMode::SWA_TEMPLATE_MODE;
 };
 
-// -----------算子Tiling入参信息解析及Check类---------------
+// -----------Operator tiling input parsing and validation---------------
 class SMLATilingCheck {
  public:
   explicit SMLATilingCheck(const SMLATilingInfo& smlaInfo)
@@ -396,7 +396,7 @@ class SMLATilingCheck {
   uint32_t oriKvHeadDim_ = 0;
   uint32_t cmpKvHeadDim_ = 0;
 
-  uint32_t qTSize_ = 0;  // 仅TND时生效
+  uint32_t qTSize_ = 0;  // Used only with TND layout.
   int64_t cmpRatio_ = 0;
   int64_t oriWinLeft_ = 0;
   int64_t oriWinRight_ = 0;
@@ -561,7 +561,7 @@ class SMLAInfoParser {
   gert::Shape cmpSparseIndicesShape_{};
 };
 
-// ---------------算子Tiling类---------------
+// ---------------Operator tiling class---------------
 class SmlaVaTiling {
  public:
   explicit SmlaVaTiling(gert::TilingContext* context) : context_(context) {};
@@ -582,7 +582,7 @@ class SmlaVaTiling {
   size_t mmResUbSize_ = 0;
   size_t bmm2ResUbSize_ = 0;
   uint32_t sInnerLoopTimes_ = 0;
-  uint32_t sInnerSize_ = 512;  // s2固定切分512
+  uint32_t sInnerSize_ = 512;  // S2 is always tiled in blocks of 512.
   uint32_t sInnerSizeAlign_ = 0;
   uint32_t usedCoreNum_ = 0;
 

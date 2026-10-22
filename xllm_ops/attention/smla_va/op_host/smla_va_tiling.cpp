@@ -294,7 +294,7 @@ static std::string SMLADataTypeToSerialString(ge::DataType type) {
   }
 }
 
-// --------------------------SMLAInfoParser类成员函数定义------------------------------------
+// --------------------------SMLAInfoParser member function definitions--------------------
 ge::graphStatus SMLAInfoParser::CheckRequiredInOutExistence() const {
   OP_CHECK_IF(opParamInfo_.q.shape == nullptr,
               OP_LOGE_FOR_INVALID_ARGUMENT_WITH_REASON(
@@ -735,7 +735,7 @@ void SMLAInfoParser::SetSMLAShape() {
   }
 }
 
-// 根据layout计算期望的连续stride
+// Compute the expected contiguous strides for the layout.
 std::vector<uint64_t> SMLAInfoParser::GetKvstride(
     const gert::Shape& shape,
     const SMLALayout& layout) const {
@@ -753,9 +753,9 @@ std::vector<uint64_t> SMLAInfoParser::GetKvstride(
   return expectedStrides;
 }
 
-// 非连续校验：通过shape计算expected stride进行校验
-// PA_BBND时，只允许0轴非连续，其余轴必须连续
-// 非PA_BBND时，所有轴都必须连续
+// Validate contiguity by computing the expected strides from the shape.
+// For PA_BBND, only axis 0 may be non-contiguous; all other axes must be contiguous.
+// For other layouts, every axis must be contiguous.
 ge::graphStatus SMLAInfoParser::CheckContiguous() const {
   bool oriKeyNonContiguous = false;
   bool cmpKeyNonContiguous = false;
@@ -865,8 +865,8 @@ ge::graphStatus SMLAInfoParser::GetActualSeqLenQSize(uint32_t& size) {
 }
 
 ge::graphStatus SMLAInfoParser::GetBatchSize() {
-  // 获取B基准    // 1、非TND: 以query的batch_size维度为基
-  // 2、TND: actual_seq_lens_q必须传入, 以actual_seq_lens_q数组的长度为B轴大小
+  // Get the B dimension. For non-TND layouts, use the query batch dimension.
+  // For TND, cu_seqlens_q is required and its length determines the B dimension.
   if (qLayout_ == SMLALayout::TND) {
     return GetActualSeqLenQSize(bSize_);
   } else {  // BSND
@@ -876,8 +876,7 @@ ge::graphStatus SMLAInfoParser::GetBatchSize() {
 }
 
 ge::graphStatus SMLAInfoParser::GetQTSize() {
-  // 获取query的T基准    // 1、非TND: 以query的batch_size维度为基准
-  // 2、TND: actual_seq_lens_q必须传入, 以actual_seq_lens_q数组的长度为B轴大小
+  // Get the query T dimension. It is used only for TND layout.
   qTSize_ = (qLayout_ == SMLALayout::TND)
                 ? GetAxisNum(qShape_, SMLAAxis::T, qLayout_)
                 : 0;
@@ -885,8 +884,7 @@ ge::graphStatus SMLAInfoParser::GetQTSize() {
 }
 
 ge::graphStatus SMLAInfoParser::GetS1Size() {
-  // 获取S1基准    // 1、非TND: 以query的S维度为基准
-  // 2、TND: actual_seq_lens_q必须传入, 以actual_seq_lens_q数组中的最大值为基准
+  // Get the S1 dimension. For TND, use the query T dimension; otherwise, use S.
   if (qLayout_ == SMLALayout::TND) {
     s1Size_ = GetAxisNum(qShape_, SMLAAxis::T, qLayout_);
   } else {  // BSND
@@ -1020,7 +1018,7 @@ ge::graphStatus SMLAInfoParser::GetS2Size() {
     cmpS2Size_ = GetAxisNum(cmpKvShape_, SMLAAxis::S, kvLayout_);
     return ge::GRAPH_SUCCESS;
   } else if (kvLayout_ == SMLALayout::PA_BBND) {
-    // 获取S2基准PAGE_ATTENTION S2 = block_table.dim1 * block_size
+    // For page attention, S2 = block_table.dim(1) * block_size.
     return GetS2SizeForPageAttention();
   }
   return ge::GRAPH_FAILED;
@@ -1985,7 +1983,7 @@ ge::graphStatus SMLATilingCheck::CheckSingleParaCmpResidualKv() const {
       smlaInfo_.perfMode == SMLATemplateMode::HCA_TEMPLATE_MODE ||
       smlaInfo_.perfMode == SMLATemplateMode::CSA_TEMPLATE_MODE;
   if (isCmpTemplate && *opParamInfo_.cmpMaskMode == 3 &&
-      cmpRatio_ != 1) {  // 3: RightDownCausal模式
+      cmpRatio_ != 1) {  // 3: RightDownCausal mode.
     OP_CHECK_IF(opParamInfo_.cmpResidualKv.tensor == nullptr,
                 OP_LOGE_FOR_INVALID_ARGUMENT_WITH_REASON(
                     opName_,
@@ -2633,11 +2631,11 @@ void SmlaVaTiling::CalcUbBmm(const SMLATilingInfo* tilingInfo) {
   mmResUbSize_ =
       sInnerSizeAlign_ *
       Align(cubeMSize,
-            16U);  // kernel按照16对齐写出，tiling按照这个原则分配内存
+            16U);  // The kernel writes with 16-element alignment; tiling uses the same alignment.
   bmm2ResUbSize_ =
       headDimAlign_ *
       Align(cubeMSize,
-            16U);  // kernel按照16对齐写出，tiling按照这个原则分配内存
+            16U);  // The kernel writes with 16-element alignment; tiling uses the same alignment.
 }
 
 void SmlaVaTiling::SplitBalanced(SMLATilingInfo* tilingInfo) {
@@ -2647,7 +2645,7 @@ void SmlaVaTiling::SplitBalanced(SMLATilingInfo* tilingInfo) {
         tilingInfo->perfMode == SMLATemplateMode::CSA_TEMPLATE_MODE
             ? tilingInfo->gSize
             : (256 / tilingInfo->gSize) *
-                  tilingInfo->gSize;  // 256：DAV_2201架构下的基础计算块大小
+                  tilingInfo->gSize;  // 256 is the base compute block size on DAV_2201.
     // DSpark ori_sparse_indices are per query token; keep one S1 row per M
     // block.
     if (tilingInfo->hasOriSparseIndices &&
@@ -2664,7 +2662,7 @@ void SmlaVaTiling::SplitBalanced(SMLATilingInfo* tilingInfo) {
   tilingData_.baseParams.set_bmm2ResUbSize(bmm2ResUbSize_);
 }
 
-// --------------------------SmlaVaTiling类成员函数定义----------------------
+// --------------------------SmlaVaTiling member function definitions----------------------
 ge::graphStatus SmlaVaTiling::DoOpTiling(SMLATilingInfo* tilingInfo) {
   auto ascendcPlatform =
       platform_ascendc::PlatformAscendC(tilingInfo->platformInfo);
@@ -2695,12 +2693,12 @@ ge::graphStatus SmlaVaTiling::DoOpTiling(SMLATilingInfo* tilingInfo) {
   if (tilingInfo->perfMode == SMLATemplateMode::CSA_TEMPLATE_MODE ||
       (tilingInfo->perfMode == SMLATemplateMode::SWA_TEMPLATE_MODE &&
        tilingInfo->hasOriSparseIndices)) {
-    constexpr uint32_t MERGE_CACHE_GM_BUF_NUM = 3;  // 3：缓存缓冲区数量
+    constexpr uint32_t MERGE_CACHE_GM_BUF_NUM = 3;  // Number of merge-cache buffers.
     workspaceSize += MERGE_CACHE_GM_BUF_NUM * 512 * 512 * 2 *
-                     aicNum;  // 缓冲区的尺寸为512x512字节，2表示双缓冲
+                     aicNum;  // Each buffer is 512 x 512 bytes; 2 indicates double buffering.
   }
 
-  // 计算vectorizeFlag (稀疏KV物理地址向量化)
+  // Compute vectorizeFlag for sparse KV physical-address vectorization.
   uint32_t vectorizeFlag = 0U;
 
   size_t* workSpaces = context_->GetWorkspaceSizes(1);
@@ -2780,13 +2778,13 @@ ge::graphStatus SmlaVaTiling::DoOpTiling(SMLATilingInfo* tilingInfo) {
 }  // namespace optiling
 
 namespace optiling {
-// --------------------------TilingPrepare函数定义-------------------------------------
+// --------------------------TilingPrepare function definition----------------------------
 static ge::graphStatus TilingPrepareForSmlaVa(
     gert::TilingParseContext* /* context */) {
   return ge::GRAPH_SUCCESS;
 }
 
-// --------------------------Tiling函数定义---------------------------
+// --------------------------Tiling function definition---------------------------
 ge::graphStatus TilingForSmlaVa(gert::TilingContext* context) {
   OP_CHECK_IF(context == nullptr,
               OPS_REPORT_VECTOR_INNER_ERR("SmlaVa", "Tiling context is null."),
@@ -2806,7 +2804,7 @@ ge::graphStatus TilingForSmlaVa(gert::TilingContext* context) {
   SmlaVaTiling tiling(context);
   return tiling.DoOpTiling(&smlaInfo);
 }
-// --------------------------Tiling函数及TilingPrepare函数注册--------
+// --------------------------Register Tiling and TilingPrepare functions--------
 IMPL_OP_OPTILING(SmlaVa)
     .Tiling(TilingForSmlaVa)
     .TilingParse<SMLACompileInfo>(TilingPrepareForSmlaVa);

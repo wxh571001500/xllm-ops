@@ -385,7 +385,7 @@ aclnnStatus CheckSingleParamSmla(int64_t batchSize,
         "be the same");
     return ACLNN_ERR_PARAM_INVALID;
   }
-  // 校验 layout_q 为 BSND 时，max_seqlen_q 必须大于 0
+  // Validate that max_seqlen_q is positive when layout_q is BSND.
   if (strcmp(layoutQOptional, "BSND") == 0 && maxSeqlenQ <= 0) {
     OP_LOGE_FOR_INVALID_VALUE_WITH_REASON(
         SMLA_ACLNN_OP_NAME,
@@ -395,7 +395,7 @@ aclnnStatus CheckSingleParamSmla(int64_t batchSize,
         "must be equal to the size of the second axis of q");
     return ACLNN_ERR_PARAM_INVALID;
   }
-  // 校验 has_ori_kv 且 layout_kv 为 BSND 时，max_seqlen_ori_kv 必须大于 0
+  // Validate that max_seqlen_ori_kv is positive when has_ori_kv is true and layout_kv is BSND.
   if (hasOriKv && strcmp(layoutKvOptional, "BSND") == 0 &&
       maxSeqlenOriKv <= 0) {
     OP_LOGE_FOR_INVALID_VALUE_WITH_REASON(
@@ -407,7 +407,7 @@ aclnnStatus CheckSingleParamSmla(int64_t batchSize,
         "must be equal to the size of the second axis of ori_kv");
     return ACLNN_ERR_PARAM_INVALID;
   }
-  // 校验 has_cmp_kv 且 layout_kv 为 BSND 时，max_seqlen_cmp_kv 必须大于 0
+  // Validate that max_seqlen_cmp_kv is positive when has_cmp_kv is true and layout_kv is BSND.
   if (hasCmpKv && strcmp(layoutKvOptional, "BSND") == 0 &&
       maxSeqlenCmpKv <= 0) {
     OP_LOGE_FOR_INVALID_VALUE_WITH_REASON(
@@ -419,7 +419,7 @@ aclnnStatus CheckSingleParamSmla(int64_t batchSize,
         "must be equal to the size of the second axis of cmp_kv");
     return ACLNN_ERR_PARAM_INVALID;
   }
-  // 核数校验
+  // Validate the core count.
   if (aicCoreNum == 0) {
     OP_LOGE_FOR_INVALID_VALUE_WITH_REASON(
         SMLA_ACLNN_OP_NAME,
@@ -456,7 +456,7 @@ aclnnStatus CheckSingleParamSmla(int64_t batchSize,
             std::to_string(optiling::AIV_CORE_MAX_NUM) + "]");
     return ACLNN_ERR_PARAM_INVALID;
   }
-  // 校验切g模板核数
+  // Validate the core count for the G-split template.
   if (numHeadsQ == 128) {
     if (aicCoreNum == 1 || aivCoreNum == 1) {
       OP_LOGE_FOR_INVALID_VALUES_WITH_REASON(
@@ -491,7 +491,7 @@ aclnnStatus CheckExistenceSmla(const aclTensor* cuSeqlensQOptional,
                                const char* layoutKvOptional,
                                const char* socVersion,
                                const aclTensor* metadata) {
-  // cu_seqlens_q 存在性校验
+  // Validate the presence of cu_seqlens_q.
   if (strcmp(layoutQOptional, "TND") == 0) {
     if (!IsTensorExistSmla(cuSeqlensQOptional)) {
       OP_LOGE_FOR_INVALID_ARGUMENT_WITH_REASON(
@@ -502,7 +502,7 @@ aclnnStatus CheckExistenceSmla(const aclTensor* cuSeqlensQOptional,
     }
   }
   if (hasOriKv) {
-    // cu_seqlens_ori_kv 存在性校验
+    // Validate the presence of cu_seqlens_ori_kv.
     if (strcmp(layoutKvOptional, "TND") == 0) {
       if (!IsTensorExistSmla(cuSeqlensOriKvOptional)) {
         OP_LOGE_FOR_INVALID_ARGUMENT_WITH_REASON(
@@ -513,7 +513,7 @@ aclnnStatus CheckExistenceSmla(const aclTensor* cuSeqlensQOptional,
         return ACLNN_ERR_PARAM_INVALID;
       }
     }
-    // seqused_ori_kv 存在性校验
+    // Validate the presence of seqused_ori_kv.
 
     if (strcmp(layoutKvOptional, "PA_BBND") == 0) {
       if (!IsTensorExistSmla(sequsedOriKvOptional)) {
@@ -526,7 +526,7 @@ aclnnStatus CheckExistenceSmla(const aclTensor* cuSeqlensQOptional,
       }
     }
 
-    // ori_topk_length 存在性校验
+    // Validate the presence of ori_topk_length.
     if (oriTopk != 0 &&
         oriMaskMode == static_cast<int64_t>(SparseModeSmla::DEFAULT_MASK)) {
       if (!IsTensorExistSmla(oriTopkLengthOptional)) {
@@ -540,7 +540,7 @@ aclnnStatus CheckExistenceSmla(const aclTensor* cuSeqlensQOptional,
     }
   }
   if (hasCmpKv) {
-    // cu_seqlens_cmp_kv 存在性校验
+    // Validate the presence of cu_seqlens_cmp_kv.
     if (strcmp(layoutKvOptional, "TND") == 0) {
       if (!IsTensorExistSmla(cuSeqlensCmpKvOptional)) {
         OP_LOGE_FOR_INVALID_ARGUMENT_WITH_REASON(
@@ -551,7 +551,7 @@ aclnnStatus CheckExistenceSmla(const aclTensor* cuSeqlensQOptional,
         return ACLNN_ERR_PARAM_INVALID;
       }
     }
-    // seqused_cmp_kv 存在性校验
+    // Validate the presence of seqused_cmp_kv.
 
     if (strcmp(layoutKvOptional, "PA_BBND") == 0) {
       if (!IsTensorExistSmla(sequsedCmpKvOptional)) {
@@ -564,7 +564,7 @@ aclnnStatus CheckExistenceSmla(const aclTensor* cuSeqlensQOptional,
       }
     }
 
-    // cmp_residual_kv 存在性校验
+    // Validate the presence of cmp_residual_kv.
     if (cmpRatio != 1 &&
         cmpMaskMode ==
             static_cast<int64_t>(SparseModeSmla::RIGHT_DOWN_CAUSAL)) {
@@ -577,7 +577,7 @@ aclnnStatus CheckExistenceSmla(const aclTensor* cuSeqlensQOptional,
         return ACLNN_ERR_PARAM_INVALID;
       }
     }
-    // cmp_topk_length 存在性校验
+    // Validate the presence of cmp_topk_length.
     if (cmpTopk != 0 &&
         cmpMaskMode == static_cast<int64_t>(SparseModeSmla::DEFAULT_MASK)) {
       if (!IsTensorExistSmla(cmpTopkLengthOptional)) {
@@ -590,7 +590,7 @@ aclnnStatus CheckExistenceSmla(const aclTensor* cuSeqlensQOptional,
       }
     }
   }
-  // metadata 存在性校验
+  // Validate that metadata is present.
   if (!IsTensorExistSmla(metadata)) {
     OP_LOGE_FOR_INVALID_ARGUMENT_WITH_REASON(
         SMLA_ACLNN_OP_NAME, "metadata", "metadata cannot be empty");
@@ -753,16 +753,16 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
     return ACLNN_ERR_PARAM_INVALID;
   }
 
-  // 校验 cu_seqlens_q
+  // Validate cu_seqlens_q.
   if (IsTensorExistSmla(cuSeqlensQOptional)) {
-    // 校验 cu_seqlens_q 维度
+    // Validate the cu_seqlens_q rank.
     dimNum = GetDimNumSmla(cuSeqlensQOptional);
     if (dimNum != 1) {
       OP_LOGE_FOR_INVALID_SHAPEDIM(
           SMLA_ACLNN_OP_NAME, "cu_seqlens_q", std::to_string(dimNum), "1");
       return ACLNN_ERR_PARAM_INVALID;
     }
-    // 校验 cu_seqlens_q 数据类型
+    // Validate the cu_seqlens_q dtype.
     dataType = GetDataTypeSmla(cuSeqlensQOptional);
     if (dataType != aclDataType::ACL_INT32) {
       OP_LOGE_FOR_INVALID_DTYPE_WITH_REASON(
@@ -773,16 +773,16 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
       return ACLNN_ERR_PARAM_INVALID;
     }
   }
-  // 校验 seqused_q
+  // Validate seqused_q.
   if (IsTensorExistSmla(sequsedQOptional)) {
-    // 校验 seqused_q 维度
+    // Validate the seqused_q rank.
     dimNum = GetDimNumSmla(sequsedQOptional);
     if (dimNum != 1) {
       OP_LOGE_FOR_INVALID_SHAPEDIM(
           SMLA_ACLNN_OP_NAME, "seqused_q", std::to_string(dimNum), "1");
       return ACLNN_ERR_PARAM_INVALID;
     }
-    // 校验 seqused_q 数据类型
+    // Validate the seqused_q dtype.
     dataType = GetDataTypeSmla(sequsedQOptional);
     if (dataType != aclDataType::ACL_INT32) {
       OP_LOGE_FOR_INVALID_DTYPE_WITH_REASON(
@@ -793,11 +793,11 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
       return ACLNN_ERR_PARAM_INVALID;
     }
   }
-  // ori_kv部分
+  // Original KV checks.
   if (hasOriKv) {
-    // 校验 cu_seqlens_ori_kv
+    // Validate cu_seqlens_ori_kv.
     if (IsTensorExistSmla(cuSeqlensOriKvOptional)) {
-      // 校验 cu_seqlens_ori_kv 维度
+      // Validate the cu_seqlens_ori_kv rank.
       dimNum = GetDimNumSmla(cuSeqlensOriKvOptional);
       if (dimNum != 1) {
         OP_LOGE_FOR_INVALID_SHAPEDIM(SMLA_ACLNN_OP_NAME,
@@ -806,7 +806,7 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
                                      "1");
         return ACLNN_ERR_PARAM_INVALID;
       }
-      // 校验 cu_seqlens_ori_kv 数据类型
+      // Validate the cu_seqlens_ori_kv dtype.
       dataType = GetDataTypeSmla(cuSeqlensOriKvOptional);
       if (dataType != aclDataType::ACL_INT32) {
         OP_LOGE_FOR_INVALID_DTYPE_WITH_REASON(
@@ -817,16 +817,16 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
         return ACLNN_ERR_PARAM_INVALID;
       }
     }
-    // 校验 seqused_ori_kv
+    // Validate seqused_ori_kv.
     if (IsTensorExistSmla(sequsedOriKvOptional)) {
-      // 校验 seqused_ori_kv 维度
+      // Validate the seqused_ori_kv rank.
       dimNum = GetDimNumSmla(sequsedOriKvOptional);
       if (dimNum != 1) {
         OP_LOGE_FOR_INVALID_SHAPEDIM(
             SMLA_ACLNN_OP_NAME, "seqused_ori_kv", std::to_string(dimNum), "1");
         return ACLNN_ERR_PARAM_INVALID;
       }
-      // 校验 seqused_ori_kv 数据类型
+      // Validate the seqused_ori_kv dtype.
       dataType = GetDataTypeSmla(sequsedOriKvOptional);
       if (dataType != aclDataType::ACL_INT32) {
         OP_LOGE_FOR_INVALID_DTYPE_WITH_REASON(
@@ -837,11 +837,11 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
         return ACLNN_ERR_PARAM_INVALID;
       }
     }
-    // 校验 ori_topk_length
+    // Validate ori_topk_length.
     if (oriTopk != 0 &&
         oriMaskMode == static_cast<int64_t>(SparseModeSmla::DEFAULT_MASK) &&
         IsTensorExistSmla(oriTopkLengthOptional)) {
-      // 校验 ori_topk_length 维度
+      // Validate the ori_topk_length rank.
       dimNum = GetDimNumSmla(oriTopkLengthOptional);
       if (strcmp(layoutQOptional, "TND") == 0) {
         if (dimNum != 2) {
@@ -864,7 +864,7 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
           return ACLNN_ERR_PARAM_INVALID;
         }
       }
-      // 校验 ori_topk_length 数据类型
+      // Validate the ori_topk_length dtype.
       dataType = GetDataTypeSmla(oriTopkLengthOptional);
       if (dataType != aclDataType::ACL_INT32) {
         OP_LOGE_FOR_INVALID_DTYPE_WITH_REASON(
@@ -876,11 +876,11 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
       }
     }
   }
-  // cmp_kv部分
+  // Compressed KV checks.
   if (hasCmpKv) {
-    // 校验 cu_seqlens_cmp_kv
+    // Validate cu_seqlens_cmp_kv.
     if (IsTensorExistSmla(cuSeqlensCmpKvOptional)) {
-      // 校验 cu_seqlens_cmp_kv 维度
+      // Validate the cu_seqlens_cmp_kv rank.
       dimNum = GetDimNumSmla(cuSeqlensCmpKvOptional);
       if (dimNum != 1) {
         OP_LOGE_FOR_INVALID_SHAPEDIM(SMLA_ACLNN_OP_NAME,
@@ -889,7 +889,7 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
                                      "1");
         return ACLNN_ERR_PARAM_INVALID;
       }
-      // 校验 cu_seqlens_cmp_kv 数据类型
+      // Validate the cu_seqlens_cmp_kv dtype.
       dataType = GetDataTypeSmla(cuSeqlensCmpKvOptional);
       if (dataType != aclDataType::ACL_INT32) {
         OP_LOGE_FOR_INVALID_DTYPE_WITH_REASON(
@@ -900,16 +900,16 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
         return ACLNN_ERR_PARAM_INVALID;
       }
     }
-    // 校验 seqused_cmp_kv
+    // Validate seqused_cmp_kv.
     if (IsTensorExistSmla(sequsedCmpKvOptional)) {
-      // 校验 seqused_cmp_kv 维度
+      // Validate the seqused_cmp_kv rank.
       dimNum = GetDimNumSmla(sequsedCmpKvOptional);
       if (dimNum != 1) {
         OP_LOGE_FOR_INVALID_SHAPEDIM(
             SMLA_ACLNN_OP_NAME, "seqused_cmp_kv", std::to_string(dimNum), "1");
         return ACLNN_ERR_PARAM_INVALID;
       }
-      // 校验 seqused_cmp_kv 数据类型
+      // Validate the seqused_cmp_kv dtype.
       dataType = GetDataTypeSmla(sequsedCmpKvOptional);
       if (dataType != aclDataType::ACL_INT32) {
         OP_LOGE_FOR_INVALID_DTYPE_WITH_REASON(
@@ -920,16 +920,16 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
         return ACLNN_ERR_PARAM_INVALID;
       }
     }
-    // 校验 cmp_residual_kv
+    // Validate cmp_residual_kv.
     if (IsTensorExistSmla(cmpResidualKvOptional)) {
-      // 校验 cmp_residual_kv 维度
+      // Validate the cmp_residual_kv rank.
       dimNum = GetDimNumSmla(cmpResidualKvOptional);
       if (dimNum != 1) {
         OP_LOGE_FOR_INVALID_SHAPEDIM(
             SMLA_ACLNN_OP_NAME, "cmp_residual_kv", std::to_string(dimNum), "1");
         return ACLNN_ERR_PARAM_INVALID;
       }
-      // 校验 cmp_residual_kv 数据类型
+      // Validate the cmp_residual_kv dtype.
       dataType = GetDataTypeSmla(cmpResidualKvOptional);
       if (dataType != aclDataType::ACL_INT32) {
         OP_LOGE_FOR_INVALID_DTYPE_WITH_REASON(
@@ -940,11 +940,11 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
         return ACLNN_ERR_PARAM_INVALID;
       }
     }
-    // 校验 cmp_topk_length
+    // Validate cmp_topk_length.
     if (cmpTopk != 0 &&
         cmpMaskMode == static_cast<int64_t>(SparseModeSmla::DEFAULT_MASK) &&
         IsTensorExistSmla(cmpTopkLengthOptional)) {
-      // 校验 cmp_topk_length 维度
+      // Validate the cmp_topk_length rank.
       dimNum = GetDimNumSmla(cmpTopkLengthOptional);
       if (strcmp(layoutQOptional, "TND") == 0) {
         if (dimNum != 2) {
@@ -967,7 +967,7 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
           return ACLNN_ERR_PARAM_INVALID;
         }
       }
-      // 校验 cmp_topk_length 数据类型
+      // Validate the cmp_topk_length dtype.
       dataType = GetDataTypeSmla(cmpTopkLengthOptional);
       if (dataType != aclDataType::ACL_INT32) {
         OP_LOGE_FOR_INVALID_DTYPE_WITH_REASON(
@@ -979,16 +979,16 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
       }
     }
   }
-  // 校验 metadata
+  // Validate metadata.
   if (IsTensorExistSmla(metadata)) {
-    // 校验 metadata 维度
+    // Validate the metadata rank.
     dimNum = GetDimNumSmla(metadata);
     if (dimNum != 1) {
       OP_LOGE_FOR_INVALID_SHAPEDIM(
           SMLA_ACLNN_OP_NAME, "metadata", std::to_string(dimNum), "1");
       return ACLNN_ERR_PARAM_INVALID;
     }
-    // 校验 metadata 元素数
+    // Validate the number of metadata elements.
     if (metadata->GetViewShape().GetDim(0) !=
         optiling::SMLA_METADATA_TOTAL_SIZE) {
       OP_LOGE_FOR_INVALID_SHAPESIZE(
@@ -998,7 +998,7 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
           std::to_string(optiling::SMLA_METADATA_TOTAL_SIZE));
       return ACLNN_ERR_PARAM_INVALID;
     }
-    // 校验 metadata 数据类型
+    // Validate the metadata dtype.
     dataType = GetDataTypeSmla(metadata);
     if (dataType != aclDataType::ACL_INT32) {
       OP_LOGE_FOR_INVALID_DTYPE_WITH_REASON(
@@ -1009,14 +1009,14 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
       return ACLNN_ERR_PARAM_INVALID;
     }
   }
-  // 校验 q/kv 维度一致性
+  // Validate that the query and KV ranks match.
   std::string querySource;
   int64_t queryBatchSize = GetQueryBatchSizeSmla(sequsedQOptional,
                                                  cuSeqlensQOptional,
                                                  layoutQOptional,
                                                  batchSize,
                                                  &querySource);
-  // 校验TND场景q维度一致性
+  // Validate query dimensions for TND layout.
   if (strcmp(layoutQOptional, "TND") == 0 &&
       IsTensorExistSmla(sequsedQOptional)) {
     int64_t cuSeqlensQBatchSize =
@@ -1041,7 +1041,7 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
                                                    layoutKvOptional,
                                                    batchSize,
                                                    &oriKvSource);
-    // 校验q与ori_kv维度一致性
+    // Validate that query and original KV dimensions match.
     if (queryBatchSize != oriKvBatchSize) {
       if (IsTensorSourceSmla(querySource) && IsTensorSourceSmla(oriKvSource)) {
         OP_LOGE_FOR_INVALID_SHAPESIZES_WITH_REASON(
@@ -1070,7 +1070,7 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
       }
       return ACLNN_ERR_PARAM_INVALID;
     }
-    // 校验TND场景ori_kv维度一致性
+    // Validate original KV dimensions for TND layout.
     if (strcmp(layoutKvOptional, "TND") == 0 &&
         IsTensorExistSmla(sequsedOriKvOptional)) {
       int64_t cuSeqlensOriKvBatchSize =
@@ -1088,12 +1088,12 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
         return ACLNN_ERR_PARAM_INVALID;
       }
     }
-    // 校验 ori_topk_length 维度一致性
+    // Validate consistency of the ori_topk_length rank.
     if (oriTopk != 0 &&
         oriMaskMode == static_cast<int64_t>(SparseModeSmla::DEFAULT_MASK) &&
         IsTensorExistSmla(oriTopkLengthOptional)) {
       if (strcmp(layoutQOptional, "BSND") == 0) {
-        // 校验 ori_topk_length 第一个维度
+        // Validate the first dimension of ori_topk_length.
         aclnnStatus ret = CheckTopkLengthFirstDimSmla(oriTopkLengthOptional,
                                                       "ori_topk_length",
                                                       queryBatchSize,
@@ -1101,7 +1101,7 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
         if (ret != ACLNN_SUCCESS) {
           return ret;
         }
-        // 校验 ori_topk_length 第二个维度
+        // Validate the second dimension of ori_topk_length.
         ret = CheckTopkLengthSingleDimSmla(oriTopkLengthOptional,
                                            "ori_topk_length",
                                            SMLA_TOPK_LENGTH_SECOND_AXIS,
@@ -1111,7 +1111,7 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
         if (ret != ACLNN_SUCCESS) {
           return ret;
         }
-        // 校验 ori_topk_length 第三个维度
+        // Validate the third dimension of ori_topk_length.
         ret = CheckTopkLengthSingleDimSmla(oriTopkLengthOptional,
                                            "ori_topk_length",
                                            SMLA_TOPK_LENGTH_THIRD_AXIS,
@@ -1122,7 +1122,7 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
           return ret;
         }
       } else if (strcmp(layoutQOptional, "TND") == 0) {
-        // 校验 ori_topk_length 第二个维度
+        // Validate the second dimension of ori_topk_length.
         aclnnStatus ret =
             CheckTopkLengthSingleDimSmla(oriTopkLengthOptional,
                                          "ori_topk_length",
@@ -1143,7 +1143,7 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
                                                    layoutKvOptional,
                                                    batchSize,
                                                    &cmpKvSource);
-    // 校验q与cmp_kv维度一致性
+    // Validate that query and compressed KV dimensions match.
     if (queryBatchSize != cmpKvBatchSize) {
       if (IsTensorSourceSmla(querySource) && IsTensorSourceSmla(cmpKvSource)) {
         OP_LOGE_FOR_INVALID_SHAPESIZES_WITH_REASON(
@@ -1172,7 +1172,7 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
       }
       return ACLNN_ERR_PARAM_INVALID;
     }
-    // 校验TND场景cmp_kv维度一致性
+    // Validate compressed KV dimensions for TND layout.
     if (strcmp(layoutKvOptional, "TND") == 0 &&
         IsTensorExistSmla(sequsedCmpKvOptional)) {
       int64_t cuSeqlensCmpKvBatchSize =
@@ -1190,7 +1190,7 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
         return ACLNN_ERR_PARAM_INVALID;
       }
     }
-    // 校验 cmp_residual_kv 元素数
+    // Validate the number of cmp_residual_kv elements.
     if (IsTensorExistSmla(cmpResidualKvOptional)) {
       if (cmpResidualKvOptional->GetViewShape().GetDim(0) != queryBatchSize) {
         if (IsTensorSourceSmla(querySource)) {
@@ -1214,12 +1214,12 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
         return ACLNN_ERR_PARAM_INVALID;
       }
     }
-    // 校验 cmp_topk_length 维度一致性
+    // Validate consistency of the cmp_topk_length rank.
     if (cmpTopk != 0 &&
         cmpMaskMode == static_cast<int64_t>(SparseModeSmla::DEFAULT_MASK) &&
         IsTensorExistSmla(cmpTopkLengthOptional)) {
       if (strcmp(layoutQOptional, "BSND") == 0) {
-        // 校验 cmp_topk_length 第一个维度
+        // Validate the first dimension of cmp_topk_length.
         aclnnStatus ret = CheckTopkLengthFirstDimSmla(cmpTopkLengthOptional,
                                                       "cmp_topk_length",
                                                       queryBatchSize,
@@ -1227,7 +1227,7 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
         if (ret != ACLNN_SUCCESS) {
           return ret;
         }
-        // 校验 cmp_topk_length 第二个维度
+        // Validate the second dimension of cmp_topk_length.
         ret = CheckTopkLengthSingleDimSmla(cmpTopkLengthOptional,
                                            "cmp_topk_length",
                                            SMLA_TOPK_LENGTH_SECOND_AXIS,
@@ -1237,7 +1237,7 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
         if (ret != ACLNN_SUCCESS) {
           return ret;
         }
-        // 校验 cmp_topk_length 第三个维度
+        // Validate the third dimension of cmp_topk_length.
         ret = CheckTopkLengthSingleDimSmla(cmpTopkLengthOptional,
                                            "cmp_topk_length",
                                            SMLA_TOPK_LENGTH_THIRD_AXIS,
@@ -1248,7 +1248,7 @@ aclnnStatus CheckConsistencySmla(const aclTensor* cuSeqlensQOptional,
           return ret;
         }
       } else if (strcmp(layoutQOptional, "TND") == 0) {
-        // 校验 cmp_topk_length 第二个维度
+        // Validate the second dimension of cmp_topk_length.
         aclnnStatus ret =
             CheckTopkLengthSingleDimSmla(cmpTopkLengthOptional,
                                          "cmp_topk_length",

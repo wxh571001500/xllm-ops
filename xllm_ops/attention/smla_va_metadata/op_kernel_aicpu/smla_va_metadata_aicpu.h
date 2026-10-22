@@ -78,26 +78,26 @@ inline bool IsWithinTolerance(T limit, T tolerance, T value) {
   return limit + tolerance >= value;
 }
 
-// 分核功能模块输出：FD信息，包含需要归约的数据索引及其分核信息
+// Core-splitting output: FD metadata containing reduction data indices and core assignments.
 struct FlashDecodeResult {
-  uint32_t fdUsedVecNum{0U};  // 归约过程使用的vector数量
-  // 1、归约任务的索引信息
+  uint32_t fdUsedVecNum{0U};  // Number of vector cores used for reduction.
+  // 1. Index metadata for reduction tasks.
   std::vector<uint32_t>
-      fdBN2Idx{};  // 每个归约任务的BN2索引，脚标为归约任务的序号，最大为核数-1
+      fdBN2Idx{};  // BN2 index per reduction task, indexed by task number, up to core count minus one.
   std::vector<uint32_t>
-      fdMIdx{};  // 每个归约任务的GS1索引，脚标为归约任务的序号
+      fdMIdx{};  // GS1 index per reduction task, indexed by task number.
   std::vector<uint32_t>
-      fdWorkspaceIdx{};  // 每个归约任务在workspace中的存放位置
+      fdWorkspaceIdx{};  // Workspace location of each reduction task.
   std::vector<uint32_t>
-      fdS2SplitNum{};  // 每个归约任务的S2核间切分份数，脚标为归约任务的序号
-  std::vector<uint32_t> fdMSize{};  // 每个归约任务m轴大小，脚标为归约任务的序号
-  // 2、FD负载均衡阶段，归约任务的分核（vec）信息
+      fdS2SplitNum{};  // Number of inter-core S2 splits per reduction task, indexed by task number.
+  std::vector<uint32_t> fdMSize{};  // M-axis size per reduction task, indexed by task number.
+  // 2. Vector-core assignments for reduction tasks during FD load balancing.
   std::vector<uint32_t>
-      fdIdx{};  // FD负载均衡阶段，每个vector处理的归约任务对应ID
+      fdIdx{};  // Reduction task ID assigned to each vector core during FD load balancing.
   std::vector<uint32_t>
-      fdMStart{};  // FD负载均衡阶段，每个vector处理的归约任务的m轴起点
+      fdMStart{};  // M-axis start of the reduction task assigned to each vector core during FD load balancing.
   std::vector<uint32_t>
-      fdMNum{};  // FD负载均衡阶段，每个vector处理的归约任务的m轴行数
+      fdMNum{};  // M-axis row count of the reduction task assigned to each vector core during FD load balancing.
 
   FlashDecodeResult(uint32_t aicNum, uint32_t aivNum)
       : fdBN2Idx(aicNum),
@@ -110,19 +110,19 @@ struct FlashDecodeResult {
         fdMNum(aivNum) {}
 };
 
-// 分核功能模块输出：FA阶段的核间分核信息
+// Core-splitting output: inter-core assignments for the FA stage.
 struct SplitResult {
-  uint32_t usedCoreNum{0U};        // 使用的核数量
-  std::vector<uint32_t> bN2End{};  // 每个核处理数据的BN2结束点
-  std::vector<uint32_t> gS1End{};  // 每个核处理数据的GS1结束点
-  std::vector<uint32_t> s2End{};   // 每个核处理数据的S2结束点
+  uint32_t usedCoreNum{0U};        // Number of cores used.
+  std::vector<uint32_t> bN2End{};  // BN2 end position of the data processed by each core.
+  std::vector<uint32_t> gS1End{};  // GS1 end position of the data processed by each core.
+  std::vector<uint32_t> s2End{};   // S2 end position of the data processed by each core.
   std::vector<uint32_t>
-      firstFdDataWorkspaceIdx{};    // 每个核第一份归约任务的存放位置
-  int64_t maxCost{0};               // 慢核开销
-  uint32_t numOfFdHead{0U};         // 归约任务数量
-  uint32_t maxS2SplitNum{0U};       // 单个归约任务最大分核数量
-  uint32_t maxS2LoopNum{0U};        // 单个核最大s2计算轮次数量
-  FlashDecodeResult fdRes{0U, 0U};  // FD信息
+      firstFdDataWorkspaceIdx{};    // Storage location of the first reduction task on each core.
+  int64_t maxCost{0};               // Cost of the slowest core.
+  uint32_t numOfFdHead{0U};         // Number of reduction tasks.
+  uint32_t maxS2SplitNum{0U};       // Maximum number of core splits for a reduction task.
+  uint32_t maxS2LoopNum{0U};        // Maximum number of S2 iterations per core.
+  FlashDecodeResult fdRes{0U, 0U};  // FD metadata.
 
   SplitResult(uint32_t aicNum, uint32_t aivNum)
       : bN2End(aicNum),
@@ -132,14 +132,14 @@ struct SplitResult {
         fdRes(aicNum, aivNum) {};
 };
 
-// 分核功能模块内部使用：记录切分信息
+// Internal core-splitting metadata: split information.
 struct SplitInfo {
-  std::vector<uint32_t> s1GBaseNum{};     // S1G方向，切了多少个基本块
-  std::vector<uint32_t> oriS2BaseNum{};   // oriS2方向，切了多少个基本块
-  std::vector<uint32_t> cmpS2BaseNum{};   // cmpS2方向，切了多少个基本块
-  std::vector<uint32_t> s1GTailSize{};    // S1G方向，尾块size
-  std::vector<uint32_t> oriS2TailSize{};  // oriS2方向，尾块size
-  std::vector<uint32_t> cmpS2TailSize{};  // cmpS2方向，尾块size
+  std::vector<uint32_t> s1GBaseNum{};     // Number of basic blocks along S1G.
+  std::vector<uint32_t> oriS2BaseNum{};   // Number of basic blocks along oriS2.
+  std::vector<uint32_t> cmpS2BaseNum{};   // Number of basic blocks along cmpS2.
+  std::vector<uint32_t> s1GTailSize{};    // Tail block size along S1G.
+  std::vector<uint32_t> oriS2TailSize{};  // Tail block size along oriS2.
+  std::vector<uint32_t> cmpS2TailSize{};  // Tail block size along cmpS2.
   bool isKvSeqAllZero{true};
 
   explicit SplitInfo(uint32_t batchSize)
@@ -151,15 +151,15 @@ struct SplitInfo {
         cmpS2TailSize(batchSize) {}
 };
 
-// 分核功能模块内部使用：记录batch的开销信息
+// Internal core-splitting metadata: batch cost information.
 struct CostInfo {
-  std::vector<int64_t> bN2CostOfEachBatch{};     // 整个batch的开销
-  std::vector<uint32_t> bN2BlockOfEachBatch{};   // 整个batch的开销
-  std::vector<uint32_t> bN2S2LoopOfEachBatch{};  // 整个batch的s2计算轮次数量
-  std::vector<int64_t> bN2LastBlockCostOfEachBatch{};  // batch最后一块的开销
+  std::vector<int64_t> bN2CostOfEachBatch{};     // Cost of the entire batch.
+  std::vector<uint32_t> bN2BlockOfEachBatch{};   // Cost of the entire batch.
+  std::vector<uint32_t> bN2S2LoopOfEachBatch{};  // Number of S2 iterations for the entire batch.
+  std::vector<int64_t> bN2LastBlockCostOfEachBatch{};  // Cost of the last block in the batch.
   uint32_t totalBlockNum{0U};
   int64_t totalCost{0};
-  int64_t maxS1GCost{0};  // 记录所有S1G行中的最大开销
+  int64_t maxS1GCost{0};  // Maximum cost across all S1G rows.
 
   explicit CostInfo(uint32_t batchSize)
       : bN2CostOfEachBatch(batchSize),
@@ -168,7 +168,7 @@ struct CostInfo {
         bN2LastBlockCostOfEachBatch(batchSize) {}
 };
 
-// 分核功能模块内部使用：分核过程中，case基本信息的上下文信息，组合以减少接口传参数量
+// Internal core-splitting context: basic case metadata grouped to reduce interface arguments.
 struct SplitContext {
   SplitInfo splitInfo{0U};
   CostInfo costInfo{0U};
@@ -177,7 +177,7 @@ struct SplitContext {
       : splitInfo(batchSize), costInfo(batchSize) {}
 };
 
-// 分核功能模块内部使用：记录batch相关的临时信息
+// Internal core-splitting context: temporary batch metadata.
 struct BatchCache {
   uint32_t bIdx{0U};
   uint32_t s1Size{0U};
@@ -190,7 +190,7 @@ struct BatchCache {
   BlockCost<int64_t> typeCost{};
 };
 
-// 分核功能模块内部使用：记录当前行（S1G）的临时信息
+// Internal core-splitting context: temporary metadata for the current S1G row.
 struct S1GCache {
   uint32_t bIdx{0U};
   uint32_t s1GIdx{0U};
@@ -198,7 +198,7 @@ struct S1GCache {
   uint32_t s2End{0U};
   uint32_t oriS2Start{0U};
   uint32_t oriS2End{0U};
-  uint32_t cmpS2Start{0U};  // win部分与cmp部分的切分点
+  uint32_t cmpS2Start{0U};  // Split point between the window and compressed parts.
   uint32_t cmpS2End{0U};
   int64_t s1GCost{0};
   int64_t s1GLastBlockCost{0};
@@ -219,15 +219,15 @@ struct S1GCache {
   uint32_t reductionBlockSize{0U};
 };
 
-// 分核功能模块内部使用：记录分配过程中，当前核的负载信息
+// Internal core-splitting context: load on the current core during assignment.
 struct CoreCache {
-  int64_t costLimit{0};  // 负载上限
-  int64_t cost{0};       // 已分配负载
-  uint32_t block{0U};    // 已分配块数
-  uint32_t s2Loop{0U};   // 已分配s2计算轮次数量
+  int64_t costLimit{0};  // Load limit.
+  int64_t cost{0};       // Assigned load.
+  uint32_t block{0U};    // Number of assigned blocks.
+  uint32_t s2Loop{0U};   // Number of assigned S2 iterations.
 };
 
-// 分核功能模块内部使用：记录分配过程中的上下文信息
+// Internal core-splitting context: assignment metadata.
 struct AssignContext {
   uint32_t curBIdx{0U};
   uint32_t curBN2Idx{0U};

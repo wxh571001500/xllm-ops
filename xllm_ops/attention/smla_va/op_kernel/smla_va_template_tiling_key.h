@@ -29,8 +29,8 @@
 #define CSA_TEMPLATE 2
 #define ORI_SPARSE_TEMPLATE 3
 #define ORI_CMP_SPARSE_TEMPLATE 4
-// 模板参数支持的范围定义
-ASCENDC_TPL_ARGS_DECL(SmlaVa, // 算子OpType
+// Define the supported ranges for template parameters.
+ASCENDC_TPL_ARGS_DECL(SmlaVa, // Operator type
                       ASCENDC_TPL_BOOL_DECL(FLASH_DECODE, 0, 1),
                       ASCENDC_TPL_UINT_DECL(LAYOUT_T, ASCENDC_TPL_4_BW, ASCENDC_TPL_UI_LIST, SMLA_LAYOUT_BSND,
                                             SMLA_LAYOUT_TND),

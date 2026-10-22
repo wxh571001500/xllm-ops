@@ -84,7 +84,7 @@ bool SmlaVaMetadataCpuKernel::Prepare(CpuKernelContext& ctx) {
 }
 
 bool SmlaVaMetadataCpuKernel::ParamsCheck() {
-  // 校验输出 metadata 是否为空
+  // Validate that the output metadata is not null.
   if (metadata_ == nullptr) {
     KERNEL_LOG_ERROR("Output metadata is nullptr");
     return false;
@@ -93,12 +93,12 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
     return false;
   }
   int32_t batchSize = GetQueryBatchSize();
-  // 校验 cu_seqlens_q 元素
+  // Validate cu_seqlens_q elements.
   if (layoutQ_ == "TND") {
     if (cuSeqlensQ_ != nullptr && cuSeqlensQ_->GetData() != nullptr) {
       const int32_t* cuSeqlensQPtr =
           static_cast<const int32_t*>(cuSeqlensQ_->GetData());
-      // 校验 cu_seqlens_q 首元素为 0
+      // Validate that the first cu_seqlens_q element is zero.
       if (cuSeqlensQPtr[0] != 0) {
         KERNEL_LOG_ERROR(
             "The first element of cu_seqlens_q should be 0, but got %d",
@@ -106,7 +106,7 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
         return false;
       }
       for (int i = 0; i < batchSize + 1; i++) {
-        // 校验 cu_seqlens_q 元素递增
+        // Validate that cu_seqlens_q elements are increasing.
         if (i > 0 && cuSeqlensQPtr[i - 1] > cuSeqlensQPtr[i]) {
           KERNEL_LOG_ERROR(
               "The elements in cu_seqlens_q must be in ascending order, "
@@ -120,7 +120,7 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
       }
     }
   }
-  // 校验 seqused_q 元素
+  // Validate seqused_q elements.
   if (sequsedQ_ != nullptr && sequsedQ_->GetData() != nullptr) {
     const int32_t* sequsedQPtr =
         static_cast<const int32_t*>(sequsedQ_->GetData());
@@ -130,7 +130,7 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
             ? static_cast<const int32_t*>(cuSeqlensQ_->GetData())
             : nullptr;
     for (int i = 0; i < batchSize; i++) {
-      // 校验 seqused_q 元素非负
+      // Validate that seqused_q elements are nonnegative.
       if (sequsedQPtr[i] < 0) {
         KERNEL_LOG_ERROR(
             "The elements in seqused_q should be >= 0, but got seqused_q[%d] = "
@@ -139,7 +139,7 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
             sequsedQPtr[i]);
         return false;
       }
-      // 校验 seqused_q 元素不大于 max_seqlen_q (BSND) 或 cu_seqlens_q 序列长度
+      // Validate that seqused_q elements do not exceed max_seqlen_q (BSND) or the cu_seqlens_q sequence length.
       // (TND)
       if (layoutQ_ == "BSND" && sequsedQPtr[i] > maxSeqlenQ_) {
         KERNEL_LOG_ERROR(
@@ -167,12 +167,12 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
     }
   }
   if (hasOriKv_) {
-    // 校验 cu_seqlens_ori_kv 元素
+    // Validate cu_seqlens_ori_kv elements.
     if (layoutKv_ == "TND") {
       if (cuSeqlensOriKv_ != nullptr && cuSeqlensOriKv_->GetData() != nullptr) {
         const int32_t* cuSeqlensOriKvPtr =
             static_cast<const int32_t*>(cuSeqlensOriKv_->GetData());
-        // 校验 cu_seqlens_ori_kv 首元素为 0
+        // Validate that the first cu_seqlens_ori_kv element is zero.
         if (cuSeqlensOriKvPtr[0] != 0) {
           KERNEL_LOG_ERROR(
               "The first element of cu_seqlens_ori_kv should be 0, but got %d",
@@ -180,7 +180,7 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
           return false;
         }
         for (int i = 0; i < batchSize + 1; i++) {
-          // 校验 cu_seqlens_ori_kv 元素递增
+          // Validate that cu_seqlens_ori_kv elements are increasing.
           if (i > 0 && cuSeqlensOriKvPtr[i - 1] > cuSeqlensOriKvPtr[i]) {
             KERNEL_LOG_ERROR(
                 "The elements in cu_seqlens_ori_kv must be in ascending order, "
@@ -195,7 +195,7 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
         }
       }
     }
-    // 校验 seqused_ori_kv 元素
+    // Validate seqused_ori_kv elements.
     if (sequsedOriKv_ != nullptr && sequsedOriKv_->GetData() != nullptr) {
       const int32_t* sequsedOriKvPtr =
           static_cast<const int32_t*>(sequsedOriKv_->GetData());
@@ -205,7 +205,7 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
               ? static_cast<const int32_t*>(cuSeqlensOriKv_->GetData())
               : nullptr;
       for (int i = 0; i < batchSize; i++) {
-        // 校验 seqused_ori_kv 元素非负
+        // Validate that seqused_ori_kv elements are nonnegative.
         if (sequsedOriKvPtr[i] < 0) {
           KERNEL_LOG_ERROR(
               "The elements in seqused_ori_kv should be >= 0, but got "
@@ -214,8 +214,8 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
               sequsedOriKvPtr[i]);
           return false;
         }
-        // 校验 seqused_ori_kv 元素不大于 max_seqlen_ori_kv (BSND) 或
-        // cu_seqlens_ori_kv 序列长度 (TND)
+        // Validate that seqused_ori_kv elements do not exceed max_seqlen_ori_kv (BSND) or
+        // the cu_seqlens_ori_kv sequence length (TND).
         if (layoutKv_ == "BSND" && sequsedOriKvPtr[i] > maxSeqlenOriKv_) {
           KERNEL_LOG_ERROR(
               "The elements in seqused_ori_kv should not be greater than "
@@ -241,11 +241,11 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
         }
       }
     }
-    // 校验 ori_topk_length 元素
+    // Validate ori_topk_length elements.
     if (oriTopK_ != 0 &&
         oriMaskMode_ == static_cast<int32_t>(SparseMode::DEFAULT_MASK) &&
         oriTopkLength_ != nullptr && oriTopkLength_->GetData() != nullptr) {
-      // 校验 ori_topk_length 元素数量
+      // Validate the number of ori_topk_length elements.
       int32_t sumOfQuerySeq = GetSumOfQuerySeq();
       const int32_t* oriTopkLengthPtr =
           static_cast<const int32_t*>(oriTopkLength_->GetData());
@@ -264,7 +264,7 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
             sumOfQuerySeq);
         return false;
       }
-      // 校验 ori_topk_length 元素非负
+      // Validate that ori_topk_length elements are nonnegative.
       for (int i = 0; i < oriTopkLengthSize; i++) {
         if (oriTopkLengthPtr[i] < 0) {
           KERNEL_LOG_ERROR(
@@ -279,11 +279,11 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
   }
   if (hasCmpKv_) {
     if (layoutKv_ == "TND") {
-      // 校验 cu_seqlens_cmp_kv 元素
+      // Validate cu_seqlens_cmp_kv elements.
       if (cuSeqlensCmpKv_ != nullptr && cuSeqlensCmpKv_->GetData() != nullptr) {
         const int32_t* cuSeqlensCmpKvPtr =
             static_cast<const int32_t*>(cuSeqlensCmpKv_->GetData());
-        // 校验 cu_seqlens_cmp_kv 首元素为 0
+        // Validate that the first cu_seqlens_cmp_kv element is zero.
         if (cuSeqlensCmpKvPtr[0] != 0) {
           KERNEL_LOG_ERROR(
               "The first element of cu_seqlens_cmp_kv should be 0, but got %d",
@@ -291,7 +291,7 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
           return false;
         }
         for (int i = 0; i < batchSize + 1; i++) {
-          // 校验 cu_seqlens_cmp_kv 元素递增
+          // Validate that cu_seqlens_cmp_kv elements are increasing.
           if (i > 0 && cuSeqlensCmpKvPtr[i - 1] > cuSeqlensCmpKvPtr[i]) {
             KERNEL_LOG_ERROR(
                 "The elements in cu_seqlens_cmp_kv must be in ascending order, "
@@ -306,7 +306,7 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
         }
       }
     }
-    // 校验 seqused_cmp_kv 元素
+    // Validate seqused_cmp_kv elements.
     if (sequsedCmpKv_ != nullptr && sequsedCmpKv_->GetData() != nullptr) {
       const int32_t* sequsedCmpKvPtr =
           static_cast<const int32_t*>(sequsedCmpKv_->GetData());
@@ -316,7 +316,7 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
               ? static_cast<const int32_t*>(cuSeqlensCmpKv_->GetData())
               : nullptr;
       for (int i = 0; i < batchSize; i++) {
-        // 校验 seqused_cmp_kv 元素非负
+        // Validate that seqused_cmp_kv elements are nonnegative.
         if (sequsedCmpKvPtr[i] < 0) {
           KERNEL_LOG_ERROR(
               "The elements in seqused_cmp_kv should be >= 0, but got "
@@ -325,8 +325,8 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
               sequsedCmpKvPtr[i]);
           return false;
         }
-        // 校验 seqused_cmp_kv 元素不大于 max_seqlen_cmp_kv (BSND) 或
-        // cu_seqlens_cmp_kv 序列长度 (TND)
+        // Validate that seqused_cmp_kv elements do not exceed max_seqlen_cmp_kv (BSND) or
+        // the cu_seqlens_cmp_kv sequence length (TND).
         if (layoutKv_ == "BSND" && sequsedCmpKvPtr[i] > maxSeqlenCmpKv_) {
           KERNEL_LOG_ERROR(
               "The elements in seqused_cmp_kv should not be greater than "
@@ -352,7 +352,7 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
         }
       }
     }
-    // 校验 cmp_residual_kv 元素
+    // Validate cmp_residual_kv elements.
     if (cmpResidualKv_ != nullptr && cmpResidualKv_->GetData() != nullptr) {
       const int32_t* cmpResidualKvPtr =
           static_cast<const int32_t*>(cmpResidualKv_->GetData());
@@ -369,11 +369,11 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
         }
       }
     }
-    // 校验 cmp_topk_length 元素
+    // Validate cmp_topk_length elements.
     if (cmpTopK_ != 0 &&
         cmpMaskMode_ == static_cast<int32_t>(SparseMode::DEFAULT_MASK) &&
         cmpTopkLength_ != nullptr && cmpTopkLength_->GetData() != nullptr) {
-      // 校验 cmp_topk_length 元素数量
+      // Validate the number of cmp_topk_length elements.
       int32_t sumOfQuerySeq = GetSumOfQuerySeq();
       const int32_t* cmpTopkLengthPtr =
           static_cast<const int32_t*>(cmpTopkLength_->GetData());
@@ -392,7 +392,7 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
             sumOfQuerySeq);
         return false;
       }
-      // 校验 cmp_topk_length 元素非负
+      // Validate that cmp_topk_length elements are nonnegative.
       for (int i = 0; i < cmpTopkLengthSize; i++) {
         if (cmpTopkLengthPtr[i] < 0) {
           KERNEL_LOG_ERROR(
@@ -410,7 +410,7 @@ bool SmlaVaMetadataCpuKernel::ParamsCheck() {
 
 int32_t SmlaVaMetadataCpuKernel::GetSumOfQuerySeq() {
   int32_t batchSize = GetQueryBatchSize();
-  // 如果sequsedQ_ 传了，使用sequsedQ_获取 BsSize
+  // If sequsedQ_ is provided, use it to obtain BsSize.
   if (sequsedQ_ != nullptr && sequsedQ_->GetData() != nullptr) {
     if (sequsedQ_->GetTensorShape() != nullptr) {
       const int32_t* seqUsedPtr =
@@ -422,9 +422,9 @@ int32_t SmlaVaMetadataCpuKernel::GetSumOfQuerySeq() {
       return queryBsSize;
     }
   }
-  // sequsedQ_ 没传，判断 Layout
+  // If sequsedQ_ is not provided, check the layout.
   if (layoutQ_ == "TND") {
-    // 如果是 TND，尝试使用 cuSeqlensQ_获取 BsSize
+    // For TND, try to obtain BsSize from cuSeqlensQ_.
     if (cuSeqlensQ_ != nullptr && cuSeqlensQ_->GetData() != nullptr) {
       if (cuSeqlensQ_->GetTensorShape() != nullptr) {
         const int32_t* s1Ptr =
@@ -433,27 +433,27 @@ int32_t SmlaVaMetadataCpuKernel::GetSumOfQuerySeq() {
       }
     }
   }
-  // 如果不是 TND，或者 cuSeqlensQ_ 为空，使用shape信息计算 BsSize
+  // If the layout is not TND or cuSeqlensQ_ is empty, calculate BsSize from the shape.
   return batchSize_ * maxSeqlenQ_;
 }
 
 int32_t SmlaVaMetadataCpuKernel::GetQueryBatchSize() {
-  // 1. 如果sequsedQ_ 传了，使用sequsedQ_获取BatchSize
+  // 1. If sequsedQ_ is provided, use it to obtain BatchSize.
   if (sequsedQ_ != nullptr && sequsedQ_->GetData() != nullptr) {
     if (sequsedQ_->GetTensorShape() != nullptr) {
       return sequsedQ_->GetTensorShape()->GetDimSize(0);
     }
   }
-  // 2. sequsedQ_ 没传，判断 Layout
+  // 2. If sequsedQ_ is not provided, check the layout.
   if (layoutQ_ == "TND") {
-    // 如果是 TND，尝试使用 cuSeqlensQ_获取BatchSize
+    // For TND, try to obtain BatchSize from cuSeqlensQ_.
     if (cuSeqlensQ_ != nullptr && cuSeqlensQ_->GetData() != nullptr) {
       if (cuSeqlensQ_->GetTensorShape() != nullptr) {
         return cuSeqlensQ_->GetTensorShape()->GetDimSize(0) - 1;
       }
     }
   }
-  // 3. 如果不是 TND，或者 cuSeqlensQ_ 为空，使用batchSize_
+  // 3. If the layout is not TND or cuSeqlensQ_ is empty, use batchSize_.
   return batchSize_;
 }
 
@@ -547,7 +547,7 @@ uint32_t SmlaVaMetadataCpuKernel::GetBsStride(uint32_t bIdx, uint32_t s1Idx) {
 }
 
 uint32_t SmlaVaMetadataCpuKernel::GetOriTopkLength(uint32_t bsStride) {
-  // 尝试使用 oriTopkLength_
+  // Try to use oriTopkLength_.
   if (oriTopK_ != 0 &&
       oriMaskMode_ == static_cast<int32_t>(SparseMode::DEFAULT_MASK) &&
       oriTopkLength_ != nullptr && oriTopkLength_->GetData() != nullptr) {
@@ -555,7 +555,7 @@ uint32_t SmlaVaMetadataCpuKernel::GetOriTopkLength(uint32_t bsStride) {
         static_cast<const int32_t*>(oriTopkLength_->GetData());
     return static_cast<uint32_t>(oriTopkPtr[bsStride]);
   }
-  // 如果不是 DEFAULT_MASK，使用 oriTopK_
+  // If the mask is not DEFAULT_MASK, use oriTopK_.
   return static_cast<uint32_t>(oriTopK_);
 }
 
@@ -610,7 +610,7 @@ uint32_t SmlaVaMetadataCpuKernel::GetOriTopkLength(
 }
 
 uint32_t SmlaVaMetadataCpuKernel::GetCmpTopkLength(uint32_t bsStride) {
-  // 尝试使用 cmpTopkLength_
+  // Try to use cmpTopkLength_.
   if (cmpTopK_ != 0 &&
       cmpMaskMode_ == static_cast<int32_t>(SparseMode::DEFAULT_MASK) &&
       cmpTopkLength_ != nullptr && cmpTopkLength_->GetData() != nullptr) {
@@ -618,77 +618,77 @@ uint32_t SmlaVaMetadataCpuKernel::GetCmpTopkLength(uint32_t bsStride) {
         static_cast<const int32_t*>(cmpTopkLength_->GetData());
     return static_cast<uint32_t>(cmpTopkPtr[bsStride]);
   }
-  // 如果不是 DEFAULT_MASK，使用 cmpTopK_
+  // If the mask is not DEFAULT_MASK, use cmpTopK_.
   return static_cast<uint32_t>(cmpTopK_);
 }
 
 uint32_t SmlaVaMetadataCpuKernel::GetS1SeqSize(uint32_t bIdx) {
-  // 1. 如果 sequsedQ_ 传了，直接使用
+  // 1. If sequsedQ_ is provided, use it directly.
   if (sequsedQ_ != nullptr && sequsedQ_->GetData() != nullptr) {
     const int32_t* seqUsedPtr =
         static_cast<const int32_t*>(sequsedQ_->GetData());
     return static_cast<uint32_t>(seqUsedPtr[bIdx]);
   }
-  // 2. sequsedQ_ 没传，判断 Layout
+  // 2. If sequsedQ_ is not provided, check the layout.
   if (layoutQ_ == "TND") {
-    // 如果是 TND，尝试使用 cuSeqlensQ_
+    // For TND, try to use cuSeqlensQ_.
     if (cuSeqlensQ_ != nullptr && cuSeqlensQ_->GetData() != nullptr) {
       const int32_t* s1Ptr =
           static_cast<const int32_t*>(cuSeqlensQ_->GetData());
       return static_cast<uint32_t>(s1Ptr[bIdx + 1U] - s1Ptr[bIdx]);
     }
   }
-  // 3. 如果不是 TND，或者 cuSeqlensQ_ 为空，使用 maxSeqlenQ_
+  // 3. If the layout is not TND or cuSeqlensQ_ is empty, use maxSeqlenQ_.
   return static_cast<uint32_t>(maxSeqlenQ_);
 }
 
 uint32_t SmlaVaMetadataCpuKernel::GetOriS2SeqSize(uint32_t bIdx) {
-  // 如果 sequsedOriKv_ 传了，直接使用
+  // If sequsedOriKv_ is provided, use it directly.
   if (sequsedOriKv_ != nullptr && sequsedOriKv_->GetData() != nullptr) {
     const int32_t* seqUsedPtr =
         static_cast<const int32_t*>(sequsedOriKv_->GetData());
     return static_cast<uint32_t>(seqUsedPtr[bIdx]);
   }
-  // sequsedOriKv_ 没传，判断 Layout
+  // If sequsedOriKv_ is not provided, check the layout.
   if (layoutKv_ == "TND") {
-    // 如果是 TND，尝试使用 cuSeqlensOriKv_
+    // For TND, try to use cuSeqlensOriKv_.
     if (cuSeqlensOriKv_ != nullptr && cuSeqlensOriKv_->GetData() != nullptr) {
       const int32_t* s2Ptr =
           static_cast<const int32_t*>(cuSeqlensOriKv_->GetData());
       return static_cast<uint32_t>(s2Ptr[bIdx + 1U] - s2Ptr[bIdx]);
     }
   }
-  // 如果是PA场景，或 max_seqlen_ori_kv 没传入，且 ori_kv 为稀疏的，则尝试从
-  // topk 中获取
+  // For PA, or if max_seqlen_ori_kv is not provided and ori_kv is sparse, try to obtain the length
+  // from topk.
   if ((layoutKv_ == "PA_BBND" || maxSeqlenOriKv_ == 0) && isSparseOriKv_) {
     return UINT32_MAX;
   }
-  // 使用 max_seqlen_ori_kv
+  // Use max_seqlen_ori_kv.
   return static_cast<uint32_t>(maxSeqlenOriKv_);
 }
 
 uint32_t SmlaVaMetadataCpuKernel::GetCmpS2SeqSize(uint32_t bIdx) {
-  // 如果 sequsedCmpKv_ 传了，直接使用
+  // If sequsedCmpKv_ is provided, use it directly.
   if (sequsedCmpKv_ != nullptr && sequsedCmpKv_->GetData() != nullptr) {
     const int32_t* seqUsedPtr =
         static_cast<const int32_t*>(sequsedCmpKv_->GetData());
     return static_cast<uint32_t>(seqUsedPtr[bIdx]);
   }
-  // sequsedCmpKv_ 没传，判断 Layout
+  // If sequsedCmpKv_ is not provided, check the layout.
   if (layoutKv_ == "TND") {
-    // 如果是 TND，尝试使用 cuSeqlensCmpKv_
+    // For TND, try to use cuSeqlensCmpKv_.
     if (cuSeqlensCmpKv_ != nullptr && cuSeqlensCmpKv_->GetData() != nullptr) {
       const int32_t* s2Ptr =
           static_cast<const int32_t*>(cuSeqlensCmpKv_->GetData());
       return static_cast<uint32_t>(s2Ptr[bIdx + 1U] - s2Ptr[bIdx]);
     }
   }
-  // 如果是PA场景，或 max_seqlen_cmp_kv 没传入，且 cmp_kv
-  // 为稀疏的，则尝试从topk中获取
+  // For PA, or if max_seqlen_cmp_kv is not provided and cmp_kv is sparse,
+  // try to obtain the length from topk.
   if ((layoutKv_ == "PA_BBND" || maxSeqlenCmpKv_ == 0) && isSparseCmpKv_) {
     return UINT32_MAX;
   }
-  // 使用 max_seqlen_cmp_kv
+  // Use max_seqlen_cmp_kv.
   return static_cast<uint32_t>(maxSeqlenCmpKv_);
 }
 
@@ -705,7 +705,7 @@ uint64_t SmlaVaMetadataCpuKernel::GetRevertS2Size(uint32_t bIdx) {
 }
 
 void SmlaVaMetadataCpuKernel::CalcSplitInfo(SplitContext& splitContext) {
-  // 计算每个batch的切分，统计是否为空batch，记录最后有效batch（每个batch的每个N2切分是一样的）
+  // Calculate splits for each batch, identify empty batches, and record the last valid batch. N2 splits are identical within each batch.
   SplitInfo& splitInfo = splitContext.splitInfo;
   for (uint32_t bIdx = 0; bIdx < batchSize_; bIdx++) {
     uint32_t s1Size = GetS1SeqSize(bIdx);
@@ -825,7 +825,7 @@ void SmlaVaMetadataCpuKernel::CalcCostTable(uint32_t s1GTailSize,
   uint32_t normalS2Size = isBatchConsistency_ && reductionBlockSize > 0U
                               ? reductionBlockSize
                               : s2BaseSize_;
-  // ori 部分 cost
+  // Cost of the original part.
   if (hasOriKv_) {
     typeCost_[ORI_NORMAL_BLOCK][ORI_NORMAL_BLOCK] =
         OriCalcCost(mBaseSize_, normalS2Size);
@@ -838,7 +838,7 @@ void SmlaVaMetadataCpuKernel::CalcCostTable(uint32_t s1GTailSize,
             ? 0U
             : OriCalcCost(s1GTailSize, oriS2TailSize);
   }
-  // cmp 部分 cost
+  // Cost of the compressed part.
   if (hasCmpKv_) {
     typeCost_[CMP_NORMAL_BLOCK][CMP_NORMAL_BLOCK] =
         CmpCalcCost(mBaseSize_, normalS2Size);
@@ -953,17 +953,17 @@ void SmlaVaMetadataCpuKernel::CalcBatchCache(uint32_t bIdx,
 
 void SmlaVaMetadataCpuKernel::CalcOriS1GCache(S1GCache& s1GCache,
                                               const SplitInfo& splitInfo) {
-  // 处理 ori 部分 block 信息
+  // Process block metadata for the original part.
   if (s1GCache.oriS2Start >= s1GCache.oriS2End) {
-    // ori 范围无效, 则整个 s1g 行等效为空行
+    // An invalid original range makes the entire S1G row effectively empty.
     s1GCache.oriS1GBlock = 0;
     s1GCache.oriS1GCost = 0;
     s1GCache.oriS1GLastBlockCost = 0;
     s1GCache.oriS1GNormalBlockCost = 0;
   } else {
-    // 计算 ori 方向 Block 数量及 Cost
+    // Calculate the block count and cost along the original axis.
     s1GCache.oriS1GBlock = s1GCache.oriS2End - s1GCache.oriS2Start;
-    // 判断 ori S2 方向是否包含尾块
+    // Check whether the original S2 axis has a tail block.
     uint32_t curOriTailS2Num = (s1GCache.oriS2TailSize != 0U) ? 1U : 0U;
     uint32_t curOriNormalS2Num = s1GCache.oriS1GBlock - curOriTailS2Num;
     if (s1GCache.s1GIdx == (splitInfo.s1GBaseNum[s1GCache.bIdx] - 1U) &&
@@ -991,17 +991,17 @@ void SmlaVaMetadataCpuKernel::CalcOriS1GCache(S1GCache& s1GCache,
 
 void SmlaVaMetadataCpuKernel::CalcCmpS1GCache(S1GCache& s1GCache,
                                               const SplitInfo& splitInfo) {
-  // 处理cmp部分block信息
+  // Process block metadata for the compressed part.
   if (s1GCache.cmpS2Start >= s1GCache.cmpS2End) {
-    // Cmp范围无效, Cost保持为 0
+    // If the compressed range is invalid, keep the cost at zero.
     s1GCache.cmpS1GBlock = 0;
     s1GCache.cmpS1GCost = 0;
     s1GCache.cmpS1GLastBlockCost = 0;
     s1GCache.cmpS1GNormalBlockCost = 0;
   } else {
-    // 计算 cmp 方向 Block 数量及 Cost
+    // Calculate the block count and cost along the compressed axis.
     s1GCache.cmpS1GBlock = s1GCache.cmpS2End - s1GCache.cmpS2Start;
-    // 判断 Cmp S2 方向是否包含尾块
+    // Check whether the compressed S2 axis has a tail block.
     uint32_t curCmpTailS2Num = (s1GCache.cmpS2TailSize != 0U)
                                    ? 1U
                                    : 0U;  // Updated check using local var
@@ -1036,7 +1036,7 @@ void SmlaVaMetadataCpuKernel::CalcOriBlockRange(
   int64_t oriS2FirstToken = oriS2TokenRange.first;
   int64_t oriS2LastToken = oriS2TokenRange.second;
   s1GCache.oriS2Start = 0;
-  // ori 部分 s2 起止和 tailSize
+  // S2 start, end, and tail size for the original part.
   if (oriS2FirstToken >= static_cast<int64_t>(batchCache.oriS2Size) ||
       oriS2LastToken < 0 || oriS2LastToken < oriS2FirstToken) {
     s1GCache.oriS2End = 0;
@@ -1048,7 +1048,7 @@ void SmlaVaMetadataCpuKernel::CalcOriBlockRange(
     oriS2LastToken = Clip(oriS2LastToken,
                           static_cast<int64_t>(0),
                           static_cast<int64_t>(batchCache.oriS2Size - 1U));
-    // oriS2LastToken 与 topk 取最小
+    // Take the minimum of oriS2LastToken and topk.
     uint32_t s1Idx = GetS1Idx(batchCache.s1Size, s1GCache.s1GIdx);
     uint32_t bsStride = GetBsStride(s1GCache.bIdx, s1Idx);
     uint32_t oriTopkSize =
@@ -1076,7 +1076,7 @@ void SmlaVaMetadataCpuKernel::CalcCmpBlockRange(
   int64_t cmpRevertS2FirstToken = cmpRevertS2TokenRange.first;
   int64_t cmpRevertS2LastToken = cmpRevertS2TokenRange.second;
   s1GCache.cmpS2Start = s1GCache.oriS2End;
-  // cmp 部分 s2 起止和 tailSize
+  // S2 start, end, and tail size for the compressed part.
   if (cmpRevertS2FirstToken >=
           static_cast<int64_t>(batchCache.cmpRevertS2Size) ||
       cmpRevertS2LastToken < 0 ||
@@ -1092,19 +1092,19 @@ void SmlaVaMetadataCpuKernel::CalcCmpBlockRange(
         Clip(cmpRevertS2LastToken,
              static_cast<int64_t>(0),
              static_cast<int64_t>(batchCache.cmpRevertS2Size - 1U));
-    // 如果压缩后长度为0，则直接返回
+    // Return immediately if the compressed length is zero.
     if ((cmpRevertS2LastToken + 1) / cmpRatio_ == 0) {
       s1GCache.cmpS2End = s1GCache.cmpS2Start;
       s1GCache.cmpS2TailSize = 0;
       return;
     }
-    // 获取压缩后的 token 索引
+    // Get the compressed token index.
     uint64_t cmpS2FirstToken =
         (cmpRevertS2FirstToken + 1) / cmpRatio_ == 0
             ? 0
             : (cmpRevertS2FirstToken + 1) / cmpRatio_ - 1U;
     uint64_t cmpS2LastToken = (cmpRevertS2LastToken + 1) / cmpRatio_ - 1U;
-    // cmpS2LastToken 与 topk 取最小
+    // Take the minimum of cmpS2LastToken and topk.
     uint32_t s1Idx = GetS1Idx(batchCache.s1Size, s1GCache.s1GIdx);
     uint32_t bsStride = GetBsStride(s1GCache.bIdx, s1Idx);
     uint32_t cmpTopkSize = GetCmpTopkLength(bsStride);
@@ -1141,7 +1141,7 @@ void SmlaVaMetadataCpuKernel::CalcS1GCache(uint32_t s1GIdx,
                                            const BatchCache& batchCache,
                                            S1GCache& s1GCache) {
   const SplitInfo& splitInfo = splitContext.splitInfo;
-  // 如果s1G是空行，则直接返回
+  // Return immediately if the S1G row is empty.
   if (splitInfo.s1GBaseNum[batchCache.bIdx] == 0) {
     s1GCache.s1GCost = 0;
     s1GCache.s1GLastBlockCost = 0;
@@ -1161,26 +1161,26 @@ void SmlaVaMetadataCpuKernel::CalcS1GCache(uint32_t s1GIdx,
   s1GCache.actOriS2Size = 0U;
   s1GCache.actCmpS2Size = 0U;
   s1GCache.reductionBlockSize = 0U;
-  // 计算 ori_kv 有效负载起止
+  // Calculate the effective workload boundaries for ori_kv.
   if (hasOriKv_) {
-    // 计算 ori_kv 的 s2Token 起止
+    // Calculate the ori_kv S2 token boundaries.
     auto oriS2TokenRange = CalcS2TokenRange(s1GIdx, batchCache, ORI_KV);
-    // 计算 ori_kv 的 s2Block 起止
+    // Calculate the ori_kv S2 block boundaries.
     CalcOriBlockRange(oriS2TokenRange, batchCache, s1GCache);
   } else {
-    // ori_kv s2Token 起止初始化为0
+    // Initialize the ori_kv S2 token boundaries to zero.
     s1GCache.oriS2Start = 0;
     s1GCache.oriS2End = s1GCache.oriS2Start;
     s1GCache.oriS2TailSize = 0;
   }
-  // 计算 cmp_kv 有效负载起止
+  // Calculate the effective workload boundaries for cmp_kv.
   if (hasCmpKv_) {
-    // 计算 cmp_kv 的 s2Token 起止
+    // Calculate the cmp_kv S2 token boundaries.
     auto cmpRevertS2TokenRange = CalcS2TokenRange(s1GIdx, batchCache, CMP_KV);
-    // 计算 cmp_kv 的 s2Block 起止
+    // Calculate the cmp_kv S2 block boundaries.
     CalcCmpBlockRange(cmpRevertS2TokenRange, batchCache, s1GCache);
   } else {
-    // cmp_kv s2Token 起止初始化为0
+    // Initialize the cmp_kv S2 token boundaries to zero.
     s1GCache.cmpS2Start = s1GCache.oriS2End;
     s1GCache.cmpS2End = s1GCache.cmpS2Start;
     s1GCache.cmpS2TailSize = 0;
@@ -1215,15 +1215,15 @@ void SmlaVaMetadataCpuKernel::CalcS1GCache(uint32_t s1GIdx,
           s1GCache.actCmpS2Size % s1GCache.reductionBlockSize;
     }
   }
-  // 计算基本块负载
+  // Calculate the workload of a basic block.
   CalcCostTable(splitInfo.s1GTailSize[s1GCache.bIdx],
                 s1GCache.reductionBlockSize,
                 s1GCache.oriS2TailSize,
                 s1GCache.cmpS2TailSize);
-  // 计算 ori 和 cmp 部分的 cost 和 block 信息
+  // Calculate cost and block metadata for the original and compressed parts.
   CalcOriS1GCache(s1GCache, splitInfo);
   CalcCmpS1GCache(s1GCache, splitInfo);
-  // 汇总 ori 和 cmp 部分的 cost 和 block 信息
+  // Aggregate cost and block metadata for the original and compressed parts.
   GatherOriAndCmpCache(s1GCache);
   s1GCache.s2Loop = static_cast<uint32_t>(
       (static_cast<uint64_t>(s1GCache.actOriS2Size) + s2BaseSize_ - 1U) /
@@ -1269,7 +1269,7 @@ void SmlaVaMetadataCpuKernel::CalcBatchCost(uint32_t bIdx,
     costInfo.bN2CostOfEachBatch[bIdx] += s1GCache.s1GCost;
     costInfo.bN2BlockOfEachBatch[bIdx] += s1GCache.s1GBlock;
     costInfo.bN2S2LoopOfEachBatch[bIdx] += s1GCache.s2Loop;
-    // 更新最大S1G行开销
+    // Update the maximum S1G row cost.
     if (s1GCache.s1GCost > costInfo.maxS1GCost) {
       costInfo.maxS1GCost = s1GCache.s1GCost;
     }
@@ -1289,8 +1289,8 @@ void SmlaVaMetadataCpuKernel::CalcCostInfo(SplitContext& splitContext) {
     return;
   }
 
-  // 计算 batch
-  // 的负载并记录，用于按batch分配，需要按行计算起止点，统计块数、负载
+  // Calculate and record the batch workload for batch-based assignment.
+  // Calculate row boundaries and aggregate block counts and workload.
   for (uint32_t bIdx = 0; bIdx < batchSize_; bIdx++) {
     CalcBatchCost(bIdx, splitContext, costInfo);
     costInfo.totalCost += costInfo.bN2CostOfEachBatch[bIdx] * numHeadsKv_;
@@ -1308,7 +1308,7 @@ void SmlaVaMetadataCpuKernel::UpdateCursor(const SplitContext& splitContext,
 
   // Update S2
   if (assignContext.curS2Idx >=
-      assignContext.s1GCache.s2End) {  // 边界assignInfo.s2End是取不到的开区间
+      assignContext.s1GCache.s2End) {  // assignInfo.s2End is an exclusive boundary.
     assignContext.curS2Idx = 0U;
     assignContext.curS1GIdx++;
     UpdateS1G = true;
@@ -1323,7 +1323,7 @@ void SmlaVaMetadataCpuKernel::UpdateCursor(const SplitContext& splitContext,
   // Update Batch
   if (assignContext.curBN2Idx ==
       batchSize_ *
-          numHeadsKv_) {  // 所有负载全部分配完，设置最后一个核的右开区间，返回
+          numHeadsKv_) {  // All workload has been assigned; set the exclusive end boundary for the last core and return.
     assignContext.curS1GIdx = 0U;
     assignContext.curS2Idx = 0U;
     assignContext.isFinished = true;
@@ -1416,7 +1416,7 @@ void SmlaVaMetadataCpuKernel::AssignByRow(const SplitContext& splitContext,
     assignContext.coreCache.cost += assignContext.s1GCache.s1GCost;
     assignContext.coreCache.block += assignContext.s1GCache.s1GBlock;
     assignContext.coreCache.s2Loop += assignContext.s1GCache.s2Loop;
-    // 当前batch被分配一行出去，更新剩余负载
+    // A row has been assigned from the current batch; update the remaining workload.
     assignContext.bN2Cost =
         assignContext.bN2Cost > assignContext.s1GCache.s1GCost
             ? assignContext.bN2Cost - assignContext.s1GCache.s1GCost
@@ -1429,7 +1429,7 @@ void SmlaVaMetadataCpuKernel::AssignByRow(const SplitContext& splitContext,
         assignContext.bN2S2Loop > assignContext.s1GCache.s2Loop
             ? assignContext.bN2S2Loop - assignContext.s1GCache.s2Loop
             : 0U;
-    // 计算新一行的信息
+    // Calculate metadata for the new row.
     do {
       assignContext.curS1GIdx++;
       CalcS1GCache(assignContext.curS1GIdx,
@@ -1486,7 +1486,7 @@ void SmlaVaMetadataCpuKernel::AssignByBlock(const SplitContext& splitContext,
   int64_t curCost = CalcCurBlockCost(assignContext);
   uint32_t curS2Loop = CalcCurBlockS2Loop(assignContext);
 
-  // (costLimit - curCostOnCore) * FA_TOLERANCE_RATIO > curCost；至少分配1块
+  // (costLimit - curCostOnCore) * FA_TOLERANCE_RATIO > curCost; assign at least one block.
   while (IsWithinTolerance(assignContext.coreCache.costLimit,
                            curCost / FA_TOLERANCE_RATIO,
                            assignContext.coreCache.cost + curCost)) {
@@ -1494,9 +1494,9 @@ void SmlaVaMetadataCpuKernel::AssignByBlock(const SplitContext& splitContext,
     assignContext.coreCache.block++;
     assignContext.coreCache.s2Loop += curS2Loop;
     assignContext.curS2Idx++;
-    // 当前batch被分配一块出去，更新剩余负载
+    // A block has been assigned from the current batch; update the remaining workload.
     assignContext.bN2Cost = assignContext.bN2Cost - curCost;
-    // 当前行被分配一块出去，更新剩余负载
+    // A block has been assigned from the current row; update the remaining workload.
     assignContext.s1GCache.s1GCost = assignContext.s1GCache.s1GCost - curCost;
     assignContext.bN2Block--;
     assignContext.s1GCache.s1GBlock--;
@@ -1525,13 +1525,13 @@ void SmlaVaMetadataCpuKernel::ForceAssign(const SplitContext& splitContext,
   assignContext.coreCache.block++;
   assignContext.coreCache.s2Loop += curS2Loop;
   assignContext.curS2Idx++;
-  // 当前batch被分配一块出去，更新剩余负载
+  // A block has been assigned from the current batch; update the remaining workload.
   assignContext.bN2Cost = assignContext.bN2Cost - curCost;
   assignContext.bN2Block--;
   assignContext.bN2S2Loop = assignContext.bN2S2Loop > curS2Loop
                                 ? assignContext.bN2S2Loop - curS2Loop
                                 : 0U;
-  // 当前行被分配一块出去，更新剩余负载
+  // A block has been assigned from the current row; update the remaining workload.
   assignContext.s1GCache.s1GCost = assignContext.s1GCache.s1GCost - curCost;
   assignContext.s1GCache.s1GBlock--;
   assignContext.s1GCache.s2Loop =
@@ -1544,16 +1544,16 @@ void SmlaVaMetadataCpuKernel::ForceAssign(const SplitContext& splitContext,
 bool SmlaVaMetadataCpuKernel::IsNeedRecordFDInfo(
     const AssignContext& assignContext,
     const SplitResult& splitRes) {
-  // 切分点大概率不会刚好在行尾，因此滞后处理归约信息的统计，到下一个切分点再判断是否需要归约
-  // 核0无需处理
+  // Split points rarely coincide with row ends. Defer reduction bookkeeping until the next split point determines whether reduction is needed.
+  // Core zero requires no processing.
   if (assignContext.curCoreIdx == 0U) {
     return false;
   }
-  // 无跨核行，无需处理
+  // No row spans multiple cores; no processing is needed.
   if (assignContext.curKvSplitPart <= 1U) {
     return false;
   }
-  // 需要归约的行还未处理完
+  // The row requiring reduction has not been fully processed.
   if (assignContext.curBN2Idx ==
           splitRes.bN2End[assignContext.curCoreIdx - 1U] &&
       assignContext.curS1GIdx ==
@@ -1580,22 +1580,22 @@ void SmlaVaMetadataCpuKernel::RecordFDInfo(const SplitContext& splitContext,
                                            const AssignContext& assignContext,
                                            SplitResult& result) {
   const SplitInfo& splitInfo = splitContext.splitInfo;
-  // 需要规约的行是上一个核的切分点所在位置
+  // The row requiring reduction contains the split point of the previous core.
   uint32_t splitBIdx =
       result.bN2End[assignContext.curCoreIdx - 1U] / numHeadsKv_;
   uint32_t splitS1GIdx = result.gS1End[assignContext.curCoreIdx - 1U];
   uint32_t s1Size = GetS1SeqSize(splitBIdx);
 
-  // 计算归约数据的FD均衡划分信息
+  // Calculate balanced FD assignments for the reduction data.
   uint32_t curFdS1gSize =
       (splitS1GIdx == splitInfo.s1GBaseNum[splitBIdx] - 1U)
           ? (static_cast<uint64_t>(s1Size) * groupSize_ -
              static_cast<uint64_t>(splitS1GIdx) * mBaseSize_)
           : mBaseSize_;
-  // 记录
+  // Record the reduction metadata.
   result.maxS2SplitNum =
       std::max(result.maxS2SplitNum, assignContext.curKvSplitPart);
-  // 若存在头归约，则切分点一定为上一个核结束的位置
+  // If a head reduction exists, its split point must be the end position of the previous core.
   result.fdRes.fdBN2Idx[result.numOfFdHead] =
       result.bN2End[assignContext.curCoreIdx - 1U];
   result.fdRes.fdMIdx[result.numOfFdHead] =
@@ -1621,13 +1621,13 @@ void SmlaVaMetadataCpuKernel::AssignBlocksToCore(
   } else {
     assignContext.coreCache.costLimit = avgCost;
   }
-  // 1、按整batch分配
+  // 1. Assign whole batches.
   AssignByBatch(splitContext, assignContext);
-  // 2、按行分配
+  // 2. Assign rows.
   AssignByRow(splitContext, assignContext);
-  // 3、按块分配
+  // 3. Assign blocks.
   AssignByBlock(splitContext, assignContext);
-  // 4、强制分配
+  // 4. Force assignment.
   if (assignContext.coreCache.block == 0 && supportFd_) {
     ForceAssign(splitContext, assignContext);
   }
@@ -1638,7 +1638,7 @@ void SmlaVaMetadataCpuKernel::AssignBlocksToCore(
   assignContext.unassignedCost -= assignContext.coreCache.cost;
   result.maxS2LoopNum =
       std::max(assignContext.coreCache.s2Loop, result.maxS2LoopNum);
-  // 对之前的归约信息进行记录并清理
+  // Record and clear the preceding reduction metadata.
   if (IsNeedRecordFDInfo(assignContext, result)) {
     if (isBatchConsistency_ && remainedBlockNum_ > 0U) {
       // curKvSplitPart already reserves one slot for the core that finishes
@@ -1650,7 +1650,7 @@ void SmlaVaMetadataCpuKernel::AssignBlocksToCore(
     assignContext.curKvSplitPart = 1U;
     remainedBlockNum_ = 0U;
   }
-  // 更新S2切分信息
+  // Update S2 split metadata.
   if (assignContext.curS2Idx > assignContext.s1GCache.s2Start &&
       assignContext.curS2Idx <= assignContext.s1GCache.s2End) {
     if (isBatchConsistency_) {
@@ -1693,7 +1693,7 @@ void SmlaVaMetadataCpuKernel::CalcSplitPlan(int64_t costLimit,
                assignContext.batchCache,
                assignContext.s1GCache);
   assignContext.curS2Idx = assignContext.s1GCache.s2Start;
-  // 负载分配
+  // Assign workload.
   for (uint32_t i = 0; i < aicCoreNum_; ++i) {
     if (result.maxCost > costLimit) {
       return;
@@ -1708,19 +1708,19 @@ void SmlaVaMetadataCpuKernel::CalcSplitPlan(int64_t costLimit,
 }
 
 void SmlaVaMetadataCpuKernel::SplitFD(SplitResult& splitRes) {
-  // 计算FD的总数据量
+  // Calculate the total FD data volume.
   uint64_t totalFDLoad = 0;
   for (uint32_t i = 0; i < splitRes.numOfFdHead; i++) {
     totalFDLoad += splitRes.fdRes.fdS2SplitNum[i] * splitRes.fdRes.fdMSize[i];
   }
-  // 计算当前最大冗余vec核数
+  // Calculate the current number of spare vector cores.
   uint32_t emptyVectorNum = aivCoreNum_ - splitRes.numOfFdHead;
-  // 计算每个核处理的load
+  // Calculate the load handled by each core.
   uint64_t averageLoad = (totalFDLoad + aivCoreNum_ - 1U) /
-                         aivCoreNum_;  // 向上取整，避免核负载为0
+                         aivCoreNum_;  // Round up to avoid zero load per core.
   uint32_t curCoreIndex = 0;
   for (uint32_t i = 0; i < splitRes.numOfFdHead; i++) {
-    // 冗余vec核数为0，此时规约任务无法进行更小的切分，只能1个vec核计算1个规约任务
+    // With no spare vector cores, reduction tasks cannot be split further; use one vector core per reduction task.
     if (emptyVectorNum == 0U) {
       splitRes.fdRes.fdIdx[curCoreIndex] = i;
       splitRes.fdRes.fdMStart[curCoreIndex] = 0U;
@@ -1728,19 +1728,19 @@ void SmlaVaMetadataCpuKernel::SplitFD(SplitResult& splitRes) {
       curCoreIndex++;
       continue;
     }
-    // 计算当前归约任务所用核数，向下取整，避免使用核数超出总核数
+    // Calculate the core count for the current reduction task, rounding down to avoid exceeding the total core count.
     uint32_t curFDVectorNum = splitRes.fdRes.fdS2SplitNum[i] *
                               splitRes.fdRes.fdMSize[i] / averageLoad;
     curFDVectorNum = std::max(1U, curFDVectorNum);
-    // 计算当前归约任务每个核的行数，向上取整，避免行数为0
+    // Calculate rows per core for the current reduction task, rounding up to avoid zero rows.
     uint32_t curAveMSize =
         (splitRes.fdRes.fdMSize[i] + curFDVectorNum - 1U) / curFDVectorNum;
     curFDVectorNum =
         (splitRes.fdRes.fdMSize[i] + curAveMSize - 1U) / curAveMSize;
-    // 需要使用的vec核数与当前剩余可用vec核数取最小
+    // Use the minimum of the required vector-core count and the currently available count.
     curFDVectorNum =
-        std::min(curFDVectorNum, emptyVectorNum + 1U);  // 1: Fd任务自身带一个核
-    // FD负载分配
+        std::min(curFDVectorNum, emptyVectorNum + 1U);  // 1: The FD task already owns one core.
+    // Assign the FD workload.
     for (uint32_t vid = 0; vid < curFDVectorNum; vid++) {
       splitRes.fdRes.fdIdx[curCoreIndex] = i;
       splitRes.fdRes.fdMStart[curCoreIndex] = vid * curAveMSize;
@@ -1750,8 +1750,8 @@ void SmlaVaMetadataCpuKernel::SplitFD(SplitResult& splitRes) {
               : (splitRes.fdRes.fdMSize[i] - vid * curAveMSize);
       curCoreIndex++;
     }
-    // 更新冗余vec核数
-    emptyVectorNum -= (curFDVectorNum - 1U);  // 1: 空余核不包含FD自身的核，要-1
+    // Update the spare vector-core count.
+    emptyVectorNum -= (curFDVectorNum - 1U);  // 1: The spare count excludes the core already owned by the FD task.
   }
   splitRes.fdRes.fdUsedVecNum = curCoreIndex;
 }
@@ -1759,9 +1759,9 @@ void SmlaVaMetadataCpuKernel::SplitFD(SplitResult& splitRes) {
 bool SmlaVaMetadataCpuKernel::BalanceSchedule(SplitResult& splitRes) {
   SplitContext splitContext(batchSize_);
 
-  // 1、划分基本块，统计信息
+  // 1. Partition basic blocks and collect metadata.
   CalcSplitInfo(splitContext);
-  // 全空case
+  // Handle a completely empty case.
   if (splitContext.splitInfo.isKvSeqAllZero) {
     splitRes.usedCoreNum = 1U;
     splitRes.bN2End[0] = batchSize_ * numHeadsKv_;
@@ -1771,16 +1771,16 @@ bool SmlaVaMetadataCpuKernel::BalanceSchedule(SplitResult& splitRes) {
   }
   CalcCostInfo(splitContext);
 
-  // 2、获取每个核的分配方案
+  // 2. Obtain the assignment plan for each core.
   splitRes.maxCost = INT64_MAX;
   splitRes.usedCoreNum = 1U;
 
   CalcSplitPlan(splitRes.maxCost, splitContext, splitRes);
-  // 3、存在FD任务，对FD进行负载均衡分配
+  // 3. If FD tasks exist, balance their workload.
   if (splitRes.numOfFdHead > 0U) {
     SplitFD(splitRes);
   }
-  splitRes.usedCoreNum = std::max(splitRes.usedCoreNum, 1U);  // 至少使用1个core
+  splitRes.usedCoreNum = std::max(splitRes.usedCoreNum, 1U);  // Use at least one core.
   return true;
 }
 
