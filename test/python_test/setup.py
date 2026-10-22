@@ -17,7 +17,6 @@ exts = []
 ext = NpuExtension(
     name="custom_ops_lib",
     sources=source_files,
-    include_dirs=[os.path.abspath(os.path.join(BASE_DIR, "../.."))],
     extra_compile_args = [
         '-I' + os.path.join(PYTORCH_NPU_INSTALL_PATH, "include/third_party/acl/inc"),
     ],
