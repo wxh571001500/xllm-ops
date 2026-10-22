@@ -20,7 +20,7 @@ limitations under the License.
 
 #include "acl/acl_rt.h"
 #include "pytorch_npu_helper.hpp"
-#include "../../xllm_ops/moe/hc_pre_va/hc_pre_va_torch_adpt.h"
+#include "xllm_ops/moe/hc_pre_va/hc_pre_va_torch_adpt.h"
 
 void select_unshared_kv_impl_npu(
     const at::Tensor& beam_index,

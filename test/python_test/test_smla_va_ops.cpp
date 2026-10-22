@@ -1,6 +1,6 @@
 #include <torch/library.h>
 #include "pytorch_npu_helper.hpp"
-#include "../../xllm_ops/attention/smla_va/smla_va_torch_adpt.h"
+#include "xllm_ops/attention/smla_va/smla_va_torch_adpt.h"
 
 TORCH_LIBRARY_FRAGMENT(xllm_ops, ops) {
     ops.def(
@@ -30,9 +30,4 @@ TORCH_LIBRARY_FRAGMENT(xllm_ops, ops) {
     );
     ops.impl("smla_va", torch::kPrivateUse1,
              &xllm_ops::smla_va);
-
 }
-
-#ifdef XLLM_OPS_SMLA_TEST_MODULE
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {}
-#endif
